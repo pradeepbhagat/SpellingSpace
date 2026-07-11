@@ -312,6 +312,7 @@ const CLASS_WORDS = ["and","good","this","very","class","fire","field","trip","w
 let state = load();
 function load(){
   try{ const s = JSON.parse(localStorage.getItem(LS_KEY)); if(s) return s; }catch(e){}
+  window.__firstRun = true;   // no saved data on this device yet
   return { stars:0, words:[], voiceURI:null, badges:[] };
   // word: {text, emoji, correct, wrong, mastered, added}
 }
@@ -461,7 +462,7 @@ function addWord(){
 function removeWord(text){
   state.words=state.words.filter(w=>w.text!==text); save(); renderParent();
 }
-function loadClassWords(){
+function seedClassWords(){
   // Date them ~5 days back (older than NEW_DAYS) so they act as review words,
   // spread over minutes so their order is stable. Skip any already present.
   const base=Date.now()-5*DAY_MS;
@@ -473,6 +474,10 @@ function loadClassWords(){
       mastered:false, added:base+i*1000});
     added++;
   });
+  return added;
+}
+function loadClassWords(){
+  const added=seedClassWords();
   save(); renderParent();
   speak(added? "Added "+added+" class words." : "Class words already added.");
 }
@@ -593,7 +598,12 @@ function sessionQueue(){
 let G=null;
 function startDaily(){
   const q=sessionQueue();
-  if(!q.length){ speak("Ask a grown up to add your words."); show('parent'); return; }
+  if(!q.length){
+    speak("Let's add your words first. Ask a grown up.");
+    buddy('👽','think',"Add words first!");
+    alert("No words yet on this tablet.\n\nTap “👨\u200d🚀 Grown-up” to add today's words, or use “Load class words”.");
+    show('parent'); return;
+  }
   G={ queue:q, wi:0, sessionStars:0, startStars:state.stars, stage:0, streak:0 };
   show('game'); updateHud();
   buddy('👽','happy',"Let's go!");
@@ -1068,6 +1078,10 @@ function shuffle(a, original){
 }
 
 document.addEventListener('pointerdown', function unlock(){ ac(); if('speechSynthesis'in window){speechSynthesis.resume&&speechSynthesis.resume(); primeSpeech();} document.removeEventListener('pointerdown',unlock); }, {once:true});
+
+// First time on this device: pre-load the class words so there's always
+// something to play (localStorage is per-device, so a new tablet starts empty).
+if(window.__firstRun && !state.words.length){ seedClassWords(); save(); }
 
 renderHome();
 </script>
