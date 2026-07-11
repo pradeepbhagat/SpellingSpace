@@ -58,6 +58,8 @@
   .fuel > div{height:100%; width:0%; background:linear-gradient(90deg,var(--accent2),var(--accent));
               transition:width .4s ease;}
   .starcount{font-size:clamp(18px,3vw,24px); font-weight:bold; white-space:nowrap;}
+  .timer{font-size:clamp(15px,2.4vw,20px); font-weight:bold; white-space:nowrap; background:#ffffff1a;
+    padding:4px 10px; border-radius:14px; margin:0 8px;}
 
   .pic{font-size:clamp(70px,20vw,150px); line-height:1; margin:6px; filter:drop-shadow(0 8px 12px #0007);}
   .instr{font-size:clamp(18px,3.6vw,28px); margin:6px 0 14px; min-height:1.4em;}
@@ -235,6 +237,7 @@
   <div class="topbar">
     <button class="btn ghost" onclick="quitGame()">⬅</button>
     <div class="fuel"><div id="fuelBar"></div></div>
+    <div class="timer" id="gTimer">⏱️ 0:00</div>
     <div class="starcount">⭐ <span id="starNow">0</span></div>
   </div>
   <div class="stage-dots" id="stageDots"></div>
@@ -799,7 +802,7 @@ function missionBriefing(){
   buddy('👽','cheer',"Ready, Captain?");
   playPhrase('mission_start');
 }
-function quitGame(){ G=null; show('home'); }
+function quitGame(){ stopTimer(); G=null; show('home'); }
 function updateHud(){
   document.getElementById('starNow').textContent=state.stars;
   const totalStages=G.queue.length*4;
@@ -818,8 +821,23 @@ function startWord(){
   G.word=G.queue[G.wi];
   G.stage=0; G.streak=0;
   document.getElementById('gPic').textContent=G.word.emoji;
+  startTimer();
   stageListen();
 }
+// Visible count-up stopwatch for the current word (encourages taking his time).
+function startTimer(){
+  stopTimer();
+  G.timerStart=Date.now();
+  updateTimer();
+  G.timerId=setInterval(updateTimer,500);
+}
+function updateTimer(){
+  const el=document.getElementById('gTimer'); if(!el||!G.timerStart) return;
+  const s=Math.floor((Date.now()-G.timerStart)/1000);
+  const m=Math.floor(s/60);
+  el.textContent='⏱️ '+m+':'+String(s%60).padStart(2,'0');
+}
+function stopTimer(){ if(G&&G.timerId){ clearInterval(G.timerId); G.timerId=null; } }
 
 /* ---- Stage 0: Listen & See ---- */
 function stageListen(){
@@ -1298,6 +1316,7 @@ function awardStars(n){
   document.getElementById('starNow').textContent=state.stars;
 }
 function celebrate(stars, nearClean){
+  stopTimer();
   stars = stars||3;
   const starRow = "⭐".repeat(stars) + "☆".repeat(3-stars);
   let msg, emo;
@@ -1319,6 +1338,7 @@ function hideCelebrate(){
   G.wi++; if(G.wi<G.queue.length){ updateHud(); startWord(); } else { endSession(); }
 }
 function endSession(){
+  stopTimer();
   document.getElementById('gArea').innerHTML='';
   document.getElementById('gPic').textContent='🏆';
   document.getElementById('gInstr').textContent=`You earned ${G?G.sessionStars:0} stars today! ⭐`;
