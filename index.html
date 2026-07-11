@@ -1128,13 +1128,26 @@ function setupSlate(){
 function loadGuide(){
   const g=W.gctx; g.clearRect(0,0,W.w,W.h);
   const ch=G.word.text[W.i]||'';
+  const size=Math.min(W.w,W.h)*0.78;
+  // Faint visible guide the child traces over.
   g.save();
   g.fillStyle='#ffffff22';
   g.textAlign='center'; g.textBaseline='middle';
-  const size=Math.min(W.w,W.h)*0.78;
   g.font='bold '+size+'px system-ui,Segoe UI,Arial';
   g.fillText(ch, W.w/2, W.h/2+size*0.03);
   g.restore();
+  // Full-opacity mask (offscreen) used only for coverage detection.
+  const EW=64, EH=64;
+  const m=document.createElement('canvas'); m.width=EW; m.height=EH;
+  const mx=m.getContext('2d');
+  mx.fillStyle='#fff'; mx.textAlign='center'; mx.textBaseline='middle';
+  const msize=EH*0.78;
+  mx.font='bold '+msize+'px system-ui,Segoe UI,Arial';
+  mx.fillText(ch, EW/2, EH/2+msize*0.03);
+  const md=mx.getImageData(0,0,EW,EH).data;
+  const mask=new Uint8Array(EW*EH); let tot=0;
+  for(let p=3,q=0;p<md.length;p+=4,q++){ if(md[p]>60){ mask[q]=1; tot++; } }
+  W.mask=mask; W.maskTot=tot; W.EW=EW; W.EH=EH;
   clearInk();
   renderSlateWord();
   const hint=document.getElementById('slateHint'); if(hint) hint.textContent='trace the glowing letter';
@@ -1146,21 +1159,17 @@ function evalTrace(final){
   const now=Date.now();
   if(!final && now-_evalT<120) return;   // throttle live eval
   _evalT=now;
-  // Downscale both canvases to a small grid and compare alpha masks.
-  const EW=64, EH=64;
-  const ge=document.createElement('canvas'); ge.width=EW; ge.height=EH;
+  if(!W.mask || !W.maskTot) return;
+  const EW=W.EW, EH=W.EH;
   const ie=document.createElement('canvas'); ie.width=EW; ie.height=EH;
-  const gx=ge.getContext('2d'), ix=ie.getContext('2d');
-  gx.drawImage(W.gc,0,0,EW,EH); ix.drawImage(W.ic,0,0,EW,EH);
-  const gd=gx.getImageData(0,0,EW,EH).data, id=ix.getImageData(0,0,EW,EH).data;
-  let guideTot=0, inkTot=0, overlap=0;
-  for(let p=3;p<gd.length;p+=4){
-    const gOn=gd[p]>40, iOn=id[p]>40;
-    if(gOn) guideTot++;
-    if(iOn) inkTot++;
-    if(gOn&&iOn) overlap++;
+  const ix=ie.getContext('2d');
+  ix.drawImage(W.ic,0,0,EW,EH);
+  const id=ix.getImageData(0,0,EW,EH).data;
+  let inkTot=0, overlap=0;
+  for(let p=3,q=0;p<id.length;p+=4,q++){
+    if(id[p]>40){ inkTot++; if(W.mask[q]) overlap++; }
   }
-  if(guideTot===0) return;
+  const guideTot=W.maskTot;
   const coverage = overlap/guideTot;          // how much of the letter is covered
   const precision = inkTot? overlap/inkTot : 0; // how much ink stayed on the letter
   const hint=document.getElementById('slateHint');
@@ -1173,8 +1182,8 @@ function evalTrace(final){
     setTimeout(clearInk,600);
     return;
   }
-  if(coverage>=0.55 && precision>=0.35){ letterAccepted(); }
-  else if(final && coverage>=0.35){ if(hint) hint.textContent='almost — keep tracing!'; }
+  if(coverage>=0.5 && precision>=0.3){ letterAccepted(); }
+  else if(final && coverage>=0.3){ if(hint) hint.textContent='almost — keep tracing!'; }
 }
 function letterAccepted(){
   if(W.accepting) return;
