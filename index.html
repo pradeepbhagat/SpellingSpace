@@ -209,6 +209,47 @@
     15%{transform:translateX(-50%) translateX(-8px) rotate(-4deg)}
     30%{transform:translateX(-50%) translateX(8px) rotate(4deg)}
     100%{opacity:1; bottom:115vh; transform:translateX(-50%) rotate(0)}}
+  /* Rocket flame + smoke trail */
+  #rocketLaunch .flame{position:absolute; left:50%; top:88%; transform:translateX(-50%);
+    font-size:60px; animation:flameFlicker .12s steps(2) infinite;}
+  @keyframes flameFlicker{0%{opacity:.9; transform:translateX(-50%) scaleY(1)}100%{opacity:.5; transform:translateX(-50%) scaleY(1.35)}}
+  .smoke{position:fixed; z-index:7; pointer-events:none; font-size:34px; opacity:.85;}
+
+  /* Screen shake for "oops" */
+  @keyframes screenShake{0%,100%{transform:translate(0,0)}
+    20%{transform:translate(-9px,3px)}40%{transform:translate(8px,-3px)}
+    60%{transform:translate(-6px,2px)}80%{transform:translate(6px,-2px)}}
+  .shake{animation:screenShake .4s ease;}
+
+  /* Oops popup */
+  #oops{position:fixed; top:32%; left:50%; transform:translate(-50%,0) scale(.4); z-index:9;
+    font-size:clamp(60px,16vw,120px); opacity:0; pointer-events:none;
+    filter:drop-shadow(0 8px 14px #0007);}
+  #oops.go{animation:oopsPop 1s ease;}
+  @keyframes oopsPop{0%{opacity:0; transform:translate(-50%,10px) scale(.4) rotate(-12deg)}
+    25%{opacity:1; transform:translate(-50%,-6px) scale(1.15) rotate(8deg)}
+    50%{transform:translate(-50%,0) scale(1) rotate(-6deg)}
+    75%{opacity:1; transform:translate(-50%,0) scale(1) rotate(4deg)}
+    100%{opacity:0; transform:translate(-50%,-20px) scale(.9)}}
+
+  /* Success starburst ring */
+  #burst{position:fixed; inset:0; z-index:6; pointer-events:none; display:none;}
+  #burst.go{display:block;}
+  .burstStar{position:absolute; left:50%; top:50%; font-size:34px; will-change:transform,opacity;}
+
+  /* Level-clear banner */
+  #levelBanner{position:fixed; top:38%; left:0; right:0; z-index:9; text-align:center;
+    pointer-events:none; opacity:0;}
+  #levelBanner .lb{display:inline-block; font-size:clamp(32px,9vw,68px); font-weight:900;
+    color:#10122e; background:linear-gradient(180deg,#ffe08a,#ffd166); padding:14px 34px; border-radius:24px;
+    box-shadow:0 10px 0 #b8912f, 0 16px 30px #0008; text-shadow:0 2px 0 #fff6;}
+  #levelBanner.go{animation:lbSwoop 2s cubic-bezier(.2,1.3,.4,1) forwards;}
+  @keyframes lbSwoop{0%{opacity:0; transform:translateX(-120%) rotate(-8deg)}
+    18%{opacity:1; transform:translateX(0) rotate(0)}
+    30%{transform:translateX(0) scale(1.08)}
+    40%{transform:translateX(0) scale(1)}
+    80%{opacity:1; transform:translateX(0)}
+    100%{opacity:0; transform:translateX(120%) rotate(6deg)}}
 </style>
 </head>
 <body>
@@ -217,7 +258,10 @@
 
 <div id="buddy"><div id="buddyBubble"></div><div id="buddyFace">👽</div></div>
 <div id="combo"></div>
-<div id="rocketLaunch">🚀</div>
+<div id="rocketLaunch"><span class="flame">🔥</span>🚀</div>
+<div id="oops">🙃</div>
+<div id="burst"></div>
+<div id="levelBanner"><span class="lb"></span></div>
 
 <!-- HOME -->
 <section id="home" class="screen active center">
@@ -798,7 +842,7 @@ function missionBriefing(){
      </div>`;
   document.getElementById('gControls').innerHTML=
     `<button class="btn big green" id="cStart">▶ Start Mission</button>`;
-  document.getElementById('cStart').onclick=()=>startWord();
+  document.getElementById('cStart').onclick=()=>{ rocketBlastOff(); startWord(); };
   buddy('👽','cheer',"Ready, Captain?");
   playPhrase('mission_start');
 }
@@ -904,7 +948,7 @@ function stageTap(){
   playPhrase('do_tap', ()=>speak(w));
 }
 function tapLetter(idx,el){
-  if(idx!==G.tapNext){ el.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:200}); buzz(); buddy('🤔','think'); return; }
+  if(idx!==G.tapNext){ el.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:200}); buzz(); oopsAnim(); buddy('🤔','think'); return; }
   el.classList.add('done'); el.classList.remove('on');
   speak(letterSound(G.word.text[idx]),{rate:0.9,pitch:1.05});
   ping(); sparkle(el, 5); buddy(null,'happy');
@@ -1055,7 +1099,7 @@ function wrongDrop(active, tile){
   G.att.wrong++; G.att.wrongThisSlot++; G.att.clean=false;
   G.word.wrong++; save();
   active.animate([{transform:'translateX(-8px)'},{transform:'translateX(8px)'},{transform:'translateX(0)'}],{duration:250});
-  buzz();
+  buzz(); oopsAnim();
   lockTiles(850);
   const needed=active.dataset.answer;
   buddy('🤔','think',randOf(ENCOURAGE));
@@ -1271,7 +1315,7 @@ function evalTrace(final){
   if(precision<0.35 && inkTot>W.baseTot*0.5){
     W.helps++;
     if(hint) hint.textContent='stay on the letter ✋';
-    buzz(); playPhrase('trace_on');
+    buzz(); oopsAnim(); playPhrase('trace_on');
     setTimeout(clearInk,700);
     return;
   }
@@ -1326,7 +1370,8 @@ function celebrate(stars, nearClean){
   document.getElementById('celebEmoji').textContent=emo;
   document.getElementById('celebMsg').innerHTML=`${msg}<br><span style="font-size:.7em">${starRow}</span>`;
   document.getElementById('celebrate').classList.add('show');
-  confetti(); win();
+  confetti(); win(); successBurst();
+  levelBanner(stars===3?'Perfect!':'Star Rescued!');
   // Rescue a star friend on the mission map.
   G.rescued=(G.rescued||0)+1; markRescued(G.rescued-1);
   buddy('🥳','cheer',"Star rescued! "+randOf(CHEERS));
@@ -1351,6 +1396,8 @@ function endSession(){
   setDots(4);
   win(); confetti();
   rocketBlastOff();
+  setTimeout(()=>levelBanner('Mission Complete!'),700);
+  setTimeout(successBurst,1400);
   buddy('🚀','cheer','Mission complete!');
   setTimeout(()=>playPhrase('mission_done'),400);
 }
@@ -1406,11 +1453,23 @@ function sparkle(el, count){
   }
 }
 
-// Rocket blast-off with rumble
+// Rocket blast-off with rumble, flame and a rising smoke trail
 function rocketBlastOff(){
   const r=document.getElementById('rocketLaunch'); if(!r) return;
   r.classList.remove('go'); void r.offsetWidth; r.classList.add('go');
   rumble();
+  // Puffs of smoke rising from the launch point.
+  let n=0;
+  const puff=setInterval(()=>{
+    const s=document.createElement('div'); s.className='smoke'; s.textContent='💨';
+    s.style.left=(50+(Math.random()*10-5))+'vw'; s.style.top='100vh';
+    document.body.appendChild(s);
+    s.animate([{transform:'translateY(0) scale(.6)',opacity:.9},
+      {transform:`translateY(-${40+Math.random()*40}vh) scale(1.6)`,opacity:0}],
+      {duration:1600,easing:'ease-out'});
+    setTimeout(()=>s.remove(),1600);
+    if(++n>10) clearInterval(puff);
+  },90);
 }
 function rumble(){
   const c=ac(); if(!c) return;
@@ -1419,6 +1478,41 @@ function rumble(){
   o.frequency.exponentialRampToValueAtTime(40,c.currentTime+1.8);
   g.gain.setValueAtTime(0.14,c.currentTime); g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+2);
   o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+2);
+}
+
+// Playful "oops" reaction: screen shake + a wobbling face, for a wrong action.
+function oopsAnim(){
+  const app=document.body;
+  app.classList.remove('shake'); void app.offsetWidth; app.classList.add('shake');
+  setTimeout(()=>app.classList.remove('shake'),450);
+  const o=document.getElementById('oops');
+  if(o){ o.textContent=randOf(['🙃','😮','🤭','😅','🌀']);
+    o.classList.remove('go'); void o.offsetWidth; o.classList.add('go'); }
+}
+
+// Success starburst: emojis fly outward from the centre in a ring.
+function successBurst(){
+  const b=document.getElementById('burst'); if(!b) return;
+  b.innerHTML=''; b.classList.add('go');
+  const emo=['⭐','🌟','✨','💫','🎉','🪐','🚀'];
+  const N=16;
+  for(let i=0;i<N;i++){
+    const s=document.createElement('div'); s.className='burstStar'; s.textContent=randOf(emo);
+    b.appendChild(s);
+    const ang=(i/N)*6.283, dist=35+Math.random()*18;
+    s.animate([{transform:'translate(-50%,-50%) scale(.3)',opacity:1},
+      {transform:`translate(calc(-50% + ${Math.cos(ang)*dist}vmin), calc(-50% + ${Math.sin(ang)*dist}vmin)) scale(1.3)`,opacity:0}],
+      {duration:900+Math.random()*300,easing:'cubic-bezier(.2,.8,.3,1)'});
+  }
+  setTimeout(()=>{ b.classList.remove('go'); b.innerHTML=''; },1300);
+}
+
+// Sweeping "Level Clear!" style banner with a spoken/tone flourish.
+function levelBanner(text){
+  const el=document.getElementById('levelBanner'); if(!el) return;
+  el.querySelector('.lb').textContent=text||'Level Clear!';
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+  setTimeout(()=>el.classList.remove('go'),2000);
 }
 
 /* ============================ FX ============================ */
