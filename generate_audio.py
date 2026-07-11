@@ -75,6 +75,8 @@ PHRASES = {
     "do_listen": "Step one, Captain! Listen closely and watch each letter light up.",
     "do_tap": "Catch the letters! Tap each glowing letter, in order, from the start.",
     "do_build": "Beam the letters home! Slide each one into its box to build the word.",
+    # ----- Dual-coding: bind the picture's meaning to the word before spelling -----
+    "this_word_is": "Look at the picture! This word is...",
 }
 
 

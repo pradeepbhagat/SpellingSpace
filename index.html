@@ -253,9 +253,15 @@
   /* Blending swoop (sound out -> whole word) */
   .slot.blend{animation:blendPulse .45s ease; box-shadow:0 0 0 5px #ffd16699; color:#fff;}
   @keyframes blendPulse{0%,100%{transform:scale(1)}45%{transform:scale(1.3)}}
-  .blendSweep{position:absolute; bottom:-10px; left:0; transform:translateX(-50%);
-    font-size:30px; transition:left .22s ease; pointer-events:none; z-index:3;
-    filter:drop-shadow(0 3px 6px #0007);}
+  /* Dual-coding word intro (picture + word before spelling) */
+  .word-intro{display:flex; flex-direction:column; align-items:center; gap:14px; padding:10px;}
+  .wi-pic{font-size:clamp(96px,28vw,190px); line-height:1;
+    filter:drop-shadow(0 10px 18px #0007);
+    animation:wiPop .6s ease, wiFloat 1.8s ease-in-out .6s infinite alternate;}
+  .wi-word{font-size:clamp(40px,13vw,88px); font-weight:900; letter-spacing:4px; color:#fff;
+    text-shadow:0 3px 0 #b8912f, 0 0 22px #ffd16688;}
+  @keyframes wiPop{0%{transform:scale(.3); opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+  @keyframes wiFloat{from{transform:translateY(0)}to{transform:translateY(-12px)}}
 </style>
 </head>
 <body>
@@ -572,7 +578,8 @@ const PHRASE_TEXT = {
   keep_going:"Keep going, you can do it!",
   do_listen:"Step one, Captain! Listen closely and watch each letter light up.",
   do_tap:"Catch the letters! Tap each glowing letter, in order, from the start.",
-  do_build:"Beam the letters home! Slide each one into its box to build the word."
+  do_build:"Beam the letters home! Slide each one into its box to build the word.",
+  this_word_is:"Look at the picture! This word is..."
 };
 
 // Device text-to-speech (fallback for parent-added words / missing clips).
@@ -874,7 +881,7 @@ function missionBriefing(){
   buddy('👽','cheer',"Ready, Captain?");
   playPhrase('mission_start');
 }
-function quitGame(){ stopTimer(); G=null; show('home'); }
+function quitGame(){ stopTimer(); if(G) clearTimeout(G.introTimer); G=null; show('home'); }
 function updateHud(){
   document.getElementById('starNow').textContent=state.stars;
   const totalStages=G.queue.length*4;
@@ -894,7 +901,29 @@ function startWord(){
   G.stage=0; G.streak=0;
   document.getElementById('gPic').textContent=G.word.emoji;
   startTimer();
-  stageListen();
+  wordIntro(stageListen);
+}
+// Dual-coding: show the picture + word and name it, so meaning binds to the
+// spelling BEFORE he starts (a picture path + a sound path = faster memory).
+function wordIntro(done){
+  G.stage=0; setDots(0); updateHud();
+  const w=G.word.text;
+  document.getElementById('gPic').textContent=G.word.emoji;
+  document.getElementById('gInstr').textContent="Look at the picture! 👀";
+  document.getElementById('gArea').innerHTML=
+    `<div class="word-intro">
+       <div class="wi-pic">${G.word.emoji}</div>
+       <div class="wi-word">${w}</div>
+     </div>`;
+  document.getElementById('gControls').innerHTML=
+    `<button class="btn big green" id="wiGo">Let's spell it ▶</button>`;
+  let advanced=false;
+  const go=()=>{ if(advanced||!G) return; advanced=true; clearTimeout(G.introTimer); done(); };
+  document.getElementById('wiGo').onclick=go;
+  buddy('👽','happy',"A "+w+"!");
+  playPhrase('this_word_is', ()=>speak(w));
+  // Auto-advance so a non-reader is never stuck, but leave time to look.
+  G.introTimer=setTimeout(go, Math.max(4500,(w.length*250)+4000));
 }
 // Visible count-up stopwatch for the current word (encourages taking his time).
 function startTimer(){
@@ -1397,7 +1426,9 @@ function celebrate(stars, nearClean){
   else if(stars===2){ msg="Great spelling! 🎉"; emo="🚀"; }
   else { msg="You got there! Keep listening 👂"; emo="🪐"; }
   document.getElementById('celebEmoji').textContent=emo;
-  document.getElementById('celebMsg').innerHTML=`${msg}<br><span style="font-size:.7em">${starRow}</span>`;
+  document.getElementById('celebMsg').innerHTML=`${msg}<br>`+
+    `<span style="font-size:.9em">${G.word.emoji} ${G.word.text}</span><br>`+
+    `<span style="font-size:.7em">${starRow}</span>`;
   document.getElementById('celebrate').classList.add('show');
   confetti(); win(); successBurst();
   levelBanner(stars===3?'Perfect!':'Star Rescued!');
