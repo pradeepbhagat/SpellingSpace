@@ -1088,6 +1088,12 @@ function shuffle(a, original){
 
 document.addEventListener('pointerdown', function unlock(){ ac(); if('speechSynthesis'in window){speechSynthesis.resume&&speechSynthesis.resume(); primeSpeech();} document.removeEventListener('pointerdown',unlock); }, {once:true});
 
+// Register the service worker so home-screen installs auto-update to the latest
+// version when online (network-first) and still work offline.
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+
 // Load the class words by default: ensure they're present unless the grown-up
 // has cleared them on purpose. Seed on first run, and also whenever the list is
 // empty and we haven't seeded before. A one-time flag stops us re-adding words
