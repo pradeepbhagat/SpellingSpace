@@ -250,6 +250,12 @@
     40%{transform:translateX(0) scale(1)}
     80%{opacity:1; transform:translateX(0)}
     100%{opacity:0; transform:translateX(120%) rotate(6deg)}}
+  /* Blending swoop (sound out -> whole word) */
+  .slot.blend{animation:blendPulse .45s ease; box-shadow:0 0 0 5px #ffd16699; color:#fff;}
+  @keyframes blendPulse{0%,100%{transform:scale(1)}45%{transform:scale(1.3)}}
+  .blendSweep{position:absolute; bottom:-10px; left:0; transform:translateX(-50%);
+    font-size:30px; transition:left .22s ease; pointer-events:none; z-index:3;
+    filter:drop-shadow(0 3px 6px #0007);}
 </style>
 </head>
 <body>
@@ -595,11 +601,25 @@ function speak(text, opts){
   }
   ttsSpeak(text, opts);
 }
-// Say a single letter by its natural clip (falls back to TTS).
+// Say a single letter: its SOUND first (phonics), then its NAME as backup.
+// e.g. "m" -> "/muh/ … em". This is how a young child sounds out spelling.
 function sayLetter(l, cb){
-  const key='letter_'+String(l).toLowerCase();
-  if(CLIPS.has(key)){ playClip(key).then(ok=>{ ok?(cb&&cb()):ttsSpeak(letterSound(l),{cb}); }); }
-  else ttsSpeak(letterSound(l),{cb});
+  const ch=String(l).toLowerCase();
+  const sk='sound_'+ch, nk='letter_'+ch;
+  const sayName=()=>{
+    if(CLIPS.has(nk)) playClip(nk).then(ok=>{ ok?(cb&&cb()):ttsSpeak(letterName(ch),{cb}); });
+    else ttsSpeak(letterName(ch),{cb});
+  };
+  if(CLIPS.has(sk)) playClip(sk).then(ok=>{ setTimeout(sayName, ok?140:0); });
+  else if(SOUND_HINTS[ch]) ttsSpeak(SOUND_HINTS[ch],{cb:()=>setTimeout(sayName,140)});
+  else sayName();
+}
+// Say ONLY the letter's phonics sound (quick cue, no name) - used while tracing
+// and for drag pick-ups so the sound is the primary, most-repeated signal.
+function sayPhoneme(l, cb){
+  const ch=String(l).toLowerCase(), sk='sound_'+ch;
+  if(CLIPS.has(sk)){ playClip(sk).then(ok=>{ ok?(cb&&cb()):ttsSpeak(SOUND_HINTS[ch]||letterName(ch),{cb}); }); }
+  else ttsSpeak(SOUND_HINTS[ch]||letterName(ch),{cb});
 }
 // Play a fixed phrase clip, then optionally continue (e.g. with a letter/word).
 function playPhrase(slug, cb){
@@ -616,6 +636,14 @@ function speakLetters(word, onEachIndex, done){
     sayLetter(letters[i], ()=>{ i++; setTimeout(next,160); });
   })();
 }
+// Phonics sound hints (fallback text if a bundled sound_ clip is missing).
+const SOUND_HINTS={
+  a:"ah", b:"buh", c:"kuh", d:"duh", e:"eh", f:"fuh", g:"guh", h:"huh",
+  i:"ih", j:"juh", k:"kuh", l:"luh", m:"muh", n:"nuh", o:"aw", p:"puh",
+  q:"kwuh", r:"ruh", s:"suh", t:"tuh", u:"uh", v:"vuh", w:"wuh", x:"ks",
+  y:"yuh", z:"zuh"
+};
+function letterName(l){ return String(l).toUpperCase(); }
 function letterSound(l){ return l.toUpperCase(); }
 function speakTest(){ playPhrase('learn'); }
 
@@ -950,7 +978,7 @@ function stageTap(){
 function tapLetter(idx,el){
   if(idx!==G.tapNext){ el.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:200}); buzz(); oopsAnim(); buddy('🤔','think'); return; }
   el.classList.add('done'); el.classList.remove('on');
-  speak(letterSound(G.word.text[idx]),{rate:0.9,pitch:1.05});
+  sayLetter(G.word.text[idx]);
   ping(); sparkle(el, 5); buddy(null,'happy');
   G.tapNext++;
   if(G.tapNext>=G.word.text.length){
@@ -1003,7 +1031,7 @@ function peekHint(){
   const slot=[...document.querySelectorAll('.slot')].find(s=>!s.classList.contains('filled'));
   if(!slot) return;
   slot.textContent=slot.dataset.answer; slot.classList.add('hint');
-  speak(letterSound(slot.dataset.answer),{rate:0.9});
+  sayLetter(slot.dataset.answer);
   setTimeout(()=>{ if(!slot.classList.contains('filled')){ slot.textContent=''; } },1500);
 }
 
@@ -1015,7 +1043,7 @@ function attachDrag(tile){
     e.preventDefault();
     drag={tile, ghost:null};
     tile.classList.add('dragging');
-    speak(letterSound(tile.dataset.letter),{rate:0.9,pitch:1.05});
+    sayPhoneme(tile.dataset.letter);
     const g=tile.cloneNode(true); g.classList.add('ghost'); g.style.position='fixed';
     g.style.pointerEvents='none'; g.style.zIndex=99; g.style.opacity='0.9';
     g.style.width=tile.offsetWidth+'px'; g.style.height=tile.offsetHeight+'px';
@@ -1065,7 +1093,7 @@ function placeInSlot(tile, slot){
     tile.classList.add('used');
     // clear any focus scaffolding
     document.querySelectorAll('.tile.glow').forEach(t=>t.classList.remove('glow'));
-    speak(letterSound(letter),{rate:0.9,pitch:1.05});
+    sayLetter(letter);
     ping();
     sparkle(active, 7);
     // Streak of correct letters in a row -> combo fun
@@ -1151,9 +1179,9 @@ function dayKey(ts){ const d=new Date(ts); return d.getFullYear()+'-'+(d.getMont
 function wordComplete(){
   const wrong = (G.att && G.att.wrong) || 0;
   if(G.stage===2){
-    // Build stage done -> finger-writing stage. No mastery credit here.
+    // Build stage done -> blend the sounds into the word, then finger-writing.
     G.word.correct++; save(); ding();
-    setTimeout(stageWrite,700);
+    blendWord(G.word.text, ()=>setTimeout(stageWrite,500));
   } else {
     // Dictation done. Reward scales with focus: clean = 3 stars, else fewer.
     const stars = wrong===0 ? 3 : (wrong<=1 ? 2 : 1);
@@ -1204,7 +1232,7 @@ function stageWrite(){
   renderSlateWord();
   setupSlate();
   loadGuide();
-  playPhrase('write_now', ()=>setTimeout(()=>speak(w),150));
+  playPhrase('write_now', ()=>setTimeout(()=>speak(w,{cb:()=>sayPhoneme(G.word.text[0])}),150));
 }
 function renderSlateWord(){
   const row=document.getElementById('slateWord'); if(!row) return;
@@ -1333,9 +1361,10 @@ function letterAccepted(){
   if(W.i>=G.word.text.length){
     sayLetter(ch, writeComplete);   // last letter: speak, then finish
   } else {
-    // Advance the guide immediately for a snappy feel; say the letter over it.
+    // Advance the guide immediately for a snappy feel; confirm the letter
+    // (sound + name), then cue the NEXT letter's sound to trace.
     loadGuide();
-    sayLetter(ch);
+    sayLetter(ch, ()=>sayPhoneme(G.word.text[W.i]));
   }
 }
 function writeComplete(){
@@ -1513,6 +1542,37 @@ function levelBanner(text){
   el.querySelector('.lb').textContent=text||'Level Clear!';
   el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
   setTimeout(()=>el.classList.remove('go'),2000);
+}
+
+// Blending swoop: sound out each letter while a rocket sweeps underneath, the
+// pace speeding up, then say the whole word - the "sounds become a word" moment.
+function blendWord(word, cb){
+  const slots=[...document.querySelectorAll('#slots .slot')];
+  const instr=document.getElementById('gInstr');
+  if(instr) instr.textContent="Blend the sounds… 🎈";
+  const wrap=document.querySelector('.word-slots');
+  let sweep=null;
+  if(wrap){
+    wrap.style.position='relative';
+    sweep=document.createElement('div'); sweep.className='blendSweep'; sweep.textContent='🚀';
+    wrap.appendChild(sweep);
+  }
+  let i=0;
+  (function step(){
+    slots.forEach(x=>x.classList.remove('blend'));
+    if(i>=slots.length){
+      if(sweep) sweep.remove();
+      setTimeout(()=>speak(word,{cb:()=>{ if(instr) instr.textContent=''; cb&&cb(); }}),160);
+      return;
+    }
+    const s=slots[i];
+    s.classList.add('blend');
+    if(sweep){ sweep.style.left=(s.offsetLeft+s.offsetWidth/2)+'px'; }
+    sayPhoneme(word[i]);
+    const gap=Math.max(320, 640 - i*80);   // accelerate: sounds run together
+    i++;
+    setTimeout(step, gap);
+  })();
 }
 
 /* ============================ FX ============================ */

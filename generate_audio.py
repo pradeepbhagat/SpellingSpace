@@ -24,6 +24,17 @@ LETTER_NAMES = {
     "x": "ex", "y": "why", "z": "zee",
 }
 
+# Letter SOUNDS (phonics) - the sound each letter makes, spelled so the neural
+# voice says the phoneme (with a light schwa for stop consonants, e.g. "buh"),
+# not the letter name. This is how a young child sounds out a word.
+LETTER_SOUNDS = {
+    "a": "ah", "b": "buh", "c": "kuh", "d": "duh", "e": "eh", "f": "fuh",
+    "g": "guh", "h": "huh", "i": "ih", "j": "juh", "k": "kuh", "l": "luh",
+    "m": "muh", "n": "nuh", "o": "aw", "p": "puh", "q": "kwuh", "r": "ruh",
+    "s": "suh", "t": "tuh", "u": "uh", "v": "vuh", "w": "wuh", "x": "ks",
+    "y": "yuh", "z": "zuh",
+}
+
 # Class words already covered (kept in sync with CLASS_WORDS in index.html).
 WORDS = [
     "and", "good", "this", "very", "class", "fire", "field", "trip", "with",
@@ -91,6 +102,9 @@ async def main():
     print("Letters:")
     for l, name in LETTER_NAMES.items():
         await gen(name, os.path.join(OUT, f"letter_{l}.mp3"), rate="-12%")
+    print("Letter sounds (phonics):")
+    for l, snd in LETTER_SOUNDS.items():
+        await gen(snd, os.path.join(OUT, f"sound_{l}.mp3"), rate="-18%")
     print(f"Words ({len(all_words)}):")
     for w in all_words:
         await gen(w, os.path.join(OUT, f"word_{w}.mp3"), rate="-6%")
@@ -100,6 +114,7 @@ async def main():
 
     # Emit a JS manifest (array of clip keys) for the app to know what exists.
     keys = ([f"letter_{l}" for l in LETTER_NAMES]
+            + [f"sound_{l}" for l in LETTER_SOUNDS]
             + [f"word_{w}" for w in all_words]
             + [f"phrase_{s}" for s in PHRASES])
     manifest = "window.AUDIO_CLIPS=" + str(keys).replace("'", '"') + ";\n"
