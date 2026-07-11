@@ -196,7 +196,8 @@
   </div>
   <div class="card">
     <h2 style="margin:0">🎙️ Voice</h2>
-    <div class="small">Pick the reading voice for your device.</div>
+    <div class="small">Pick the reading voice. ⭐ marked voices sound smoothest.
+      If it's choppy, try one of those (they may need internet the first time).</div>
     <select id="voiceSelect" style="font-size:18px;padding:8px;border-radius:10px;width:100%;margin-top:8px"></select>
   </div>
 </section>
@@ -279,13 +280,21 @@ function loadVoices(){
   const sel = document.getElementById('voiceSelect');
   if(sel){
     sel.innerHTML = '';
-    voices.forEach(v=>{
+    // Show English voices first, marking the smoothest ones with a star.
+    const best=bestDefaultVoice();
+    const ordered=voices.slice().sort((a,b)=>{
+      const ae=/^en/i.test(a.lang)?0:1, be=/^en/i.test(b.lang)?0:1;
+      return ae-be || a.name.localeCompare(b.name);
+    });
+    ordered.forEach(v=>{
       const o=document.createElement('option');
-      o.value=v.voiceURI; o.textContent=`${v.name} (${v.lang})`;
-      if(v.voiceURI===state.voiceURI) o.selected=true;
+      const smooth=/natural|neural|online|google/i.test(v.name);
+      o.value=v.voiceURI;
+      o.textContent=`${smooth?'⭐ ':''}${v.name} (${v.lang})`;
+      if(state.voiceURI ? v.voiceURI===state.voiceURI : (best && v.voiceURI===best.voiceURI)) o.selected=true;
       sel.appendChild(o);
     });
-    sel.onchange = ()=>{ state.voiceURI=sel.value; save(); };
+    sel.onchange = ()=>{ state.voiceURI=sel.value; save(); speak("Hi! I will read your words."); };
   }
 }
 if('speechSynthesis' in window){
@@ -294,26 +303,54 @@ if('speechSynthesis' in window){
 }
 function pickVoice(){
   if(state.voiceURI){ const v=voices.find(v=>v.voiceURI===state.voiceURI); if(v) return v; }
-  return voices.find(v=>/en[-_]/i.test(v.lang)) || voices[0];
+  return bestDefaultVoice();
+}
+// Prefer high-quality, natural-sounding English voices over robotic desktop ones.
+function bestDefaultVoice(){
+  const en=voices.filter(v=>/^en(-|_)/i.test(v.lang));
+  const pool=en.length?en:voices;
+  const score=v=>{
+    const n=(v.name||'').toLowerCase();
+    let s=0;
+    if(/natural|neural|online/.test(n)) s+=100;          // MS Online Natural voices
+    if(/google/.test(n)) s+=90;                           // Google voices (Chrome)
+    if(/(zira|aria|jenny|libby|sonia|michelle|clara|samantha|karen|female)/.test(n)) s+=30; // clearer/female
+    if(/desktop/.test(n)) s-=40;                          // old robotic desktop voices
+    if(/david|mark/.test(n)) s-=10;
+    if(/en-us/i.test(v.lang)) s+=6;
+    if(/en-gb/i.test(v.lang)) s+=4;
+    if(v.localService===false) s+=8;                      // cloud voices usually smoother
+    return s;
+  };
+  return pool.slice().sort((a,b)=>score(b)-score(a))[0] || voices[0];
+}
+// Keep speech engine warm so the first words aren't cut off / choppy.
+function primeSpeech(){
+  if(!('speechSynthesis' in window)) return;
+  try{ const u=new SpeechSynthesisUtterance(' '); u.volume=0; speechSynthesis.speak(u); }catch(e){}
 }
 function speak(text, opts){
   opts=opts||{};
-  const rate=opts.rate!=null?opts.rate:0.85, pitch=opts.pitch!=null?opts.pitch:1.1, cb=opts.cb||null;
+  const rate=opts.rate!=null?opts.rate:0.95, pitch=opts.pitch!=null?opts.pitch:1.0;
+  const cb=opts.cb||null, queue=!!opts.queue;
   if(!('speechSynthesis' in window)){ cb&&cb(); return; }
-  speechSynthesis.cancel();
+  // Only interrupt when we're NOT queueing; this prevents chopping mid-word.
+  if(!queue) speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(text);
   const v=pickVoice(); if(v) u.voice=v;
-  u.rate=rate; u.pitch=pitch; u.lang=(v&&v.lang)||'en-US';
+  u.rate=rate; u.pitch=pitch; u.volume=1; u.lang=(v&&v.lang)||'en-US';
   if(cb) u.onend=cb;
   speechSynthesis.speak(u);
 }
 function speakLetters(word, onEachIndex, done){
   const letters=word.split('');
+  // One flush, then queue each letter so the engine doesn't cancel mid-flow.
+  if('speechSynthesis' in window) speechSynthesis.cancel();
   let i=0;
   (function next(){
     if(i>=letters.length){ done&&done(); return; }
     onEachIndex && onEachIndex(i);
-    speak(letterSound(letters[i]),{rate:0.8,pitch:1.15,cb:()=>{ i++; setTimeout(next,220); }});
+    speak(letterSound(letters[i]),{rate:0.9,pitch:1.0,queue:true,cb:()=>{ i++; setTimeout(next,140); }});
   })();
 }
 function letterSound(l){ return l.toUpperCase(); }
@@ -563,7 +600,7 @@ function stageTap(){
 function tapLetter(idx,el){
   if(idx!==G.tapNext){ el.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:200}); buzz(); return; }
   el.classList.add('done'); el.classList.remove('on');
-  speak(letterSound(G.word.text[idx]),{rate:0.8,pitch:1.2});
+  speak(letterSound(G.word.text[idx]),{rate:0.9,pitch:1.05});
   ping();
   G.tapNext++;
   if(G.tapNext>=G.word.text.length){
@@ -615,7 +652,7 @@ function peekHint(){
   const slot=[...document.querySelectorAll('.slot')].find(s=>!s.classList.contains('filled'));
   if(!slot) return;
   slot.textContent=slot.dataset.answer; slot.classList.add('hint');
-  speak(letterSound(slot.dataset.answer),{rate:0.8});
+  speak(letterSound(slot.dataset.answer),{rate:0.9});
   setTimeout(()=>{ if(!slot.classList.contains('filled')){ slot.textContent=''; } },1500);
 }
 
@@ -627,7 +664,7 @@ function attachDrag(tile){
     e.preventDefault();
     drag={tile, ghost:null};
     tile.classList.add('dragging');
-    speak(letterSound(tile.dataset.letter),{rate:0.8,pitch:1.2});
+    speak(letterSound(tile.dataset.letter),{rate:0.9,pitch:1.05});
     const g=tile.cloneNode(true); g.classList.add('ghost'); g.style.position='fixed';
     g.style.pointerEvents='none'; g.style.zIndex=99; g.style.opacity='0.9';
     g.style.width=tile.offsetWidth+'px'; g.style.height=tile.offsetHeight+'px';
@@ -677,7 +714,7 @@ function placeInSlot(tile, slot){
     tile.classList.add('used');
     // clear any focus scaffolding
     document.querySelectorAll('.tile.glow').forEach(t=>t.classList.remove('glow'));
-    speak(letterSound(letter),{rate:0.8,pitch:1.25});
+    speak(letterSound(letter),{rate:0.9,pitch:1.05});
     ping();
     G.filled++;
     G.att.wrongThisSlot=0;
@@ -714,7 +751,7 @@ function wrongDrop(active, tile){
   } else {
     // Repeated guessing on the same letter: scaffold by glowing the right tile.
     document.getElementById('gInstr').textContent="Find this letter 👇";
-    setTimeout(()=>speak("This one. "+letterSound(needed),{rate:0.8}),300);
+    setTimeout(()=>speak("This one. "+letterSound(needed),{rate:0.95}),300);
     highlightCorrectTile(needed);
   }
   // Too much random guessing in dictation -> gently restart so a mess can't fluke a win.
@@ -870,7 +907,7 @@ function shuffle(a, original){
   return a;
 }
 
-document.addEventListener('pointerdown', function unlock(){ ac(); if('speechSynthesis'in window){speechSynthesis.resume&&speechSynthesis.resume();} document.removeEventListener('pointerdown',unlock); }, {once:true});
+document.addEventListener('pointerdown', function unlock(){ ac(); if('speechSynthesis'in window){speechSynthesis.resume&&speechSynthesis.resume(); primeSpeech();} document.removeEventListener('pointerdown',unlock); }, {once:true});
 
 renderHome();
 </script>
