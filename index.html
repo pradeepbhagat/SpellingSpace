@@ -243,9 +243,17 @@
   </div>
   <div class="card">
     <h2 style="margin:0">🎙️ Voice</h2>
-    <div class="small">Pick the reading voice. ⭐ marked voices sound smoothest.
-      If it's choppy, try one of those (they may need internet the first time).</div>
+    <div class="small">Pick the reading voice. ⭐ = natural &amp; human-sounding. Avoid ones marked "robotic".</div>
     <select id="voiceSelect" style="font-size:18px;padding:8px;border-radius:10px;width:100%;margin-top:8px"></select>
+    <details style="margin-top:10px" class="small">
+      <summary style="cursor:pointer;font-weight:bold">📱 iPad/iPhone sounds robotic? Tap here (one-time, free)</summary>
+      <ol style="margin:8px 0 0;padding-left:20px;line-height:1.5">
+        <li>Open <b>Settings</b> → <b>Accessibility</b> → <b>Spoken Content</b> → <b>Voices</b> → <b>English</b>.</li>
+        <li>Tap a voice, then download one marked <b>(Enhanced)</b> or <b>(Premium)</b> — e.g. <b>Ava (Premium)</b> or <b>Samantha (Enhanced)</b>.</li>
+        <li>Come back here, reload the page, and pick the ⭐ voice above.</li>
+      </ol>
+      <div style="margin-top:6px;opacity:.8">This gives a real, human-sounding voice. The default iOS voice is a low-quality "compact" one.</div>
+    </details>
   </div>
 </section>
 
@@ -337,9 +345,14 @@ function loadVoices(){
     });
     ordered.forEach(v=>{
       const o=document.createElement('option');
-      const smooth=/natural|neural|online|google/i.test(v.name);
+      const id=((v.voiceURI||'')+' '+(v.name||'')).toLowerCase();
+      const premium=/premium|enhanced|natural|neural|online/.test(id);
+      const compact=/compact/.test(id);
+      const google=/google/.test(id);
+      const star = premium ? '⭐ ' : (google ? '⭐ ' : '');
+      const tag = premium ? ' — natural' : (compact ? ' — robotic' : '');
       o.value=v.voiceURI;
-      o.textContent=`${smooth?'⭐ ':''}${v.name} (${v.lang})`;
+      o.textContent=`${star}${v.name} (${v.lang})${tag}`;
       if(state.voiceURI ? v.voiceURI===state.voiceURI : (best && v.voiceURI===best.voiceURI)) o.selected=true;
       sel.appendChild(o);
     });
@@ -360,12 +373,18 @@ function bestDefaultVoice(){
   const pool=en.length?en:voices;
   const score=v=>{
     const n=(v.name||'').toLowerCase();
+    const id=((v.voiceURI||'')+' '+n).toLowerCase();  // iOS hides quality in voiceURI
     let s=0;
-    if(/natural|neural|online/.test(n)) s+=100;          // MS Online Natural voices
-    if(/google/.test(n)) s+=90;                           // Google voices (Chrome)
-    if(/(zira|aria|jenny|libby|sonia|michelle|clara|samantha|karen|female)/.test(n)) s+=30; // clearer/female
-    if(/desktop/.test(n)) s-=40;                          // old robotic desktop voices
-    if(/david|mark/.test(n)) s-=10;
+    // Highest-quality neural/downloaded voices (iOS Premium/Enhanced, MS Natural, etc.)
+    if(/premium/.test(id)) s+=300;                        // iOS Premium = most human
+    if(/enhanced/.test(id)) s+=200;                       // iOS Enhanced = very natural
+    if(/natural|neural|online/.test(id)) s+=180;          // MS Online Natural voices
+    if(/google/.test(id)) s+=120;                         // Google voices (Chrome/Android)
+    if(/compact/.test(id)) s-=150;                        // iOS compact = the robotic default
+    // Pleasant, kid-friendly named voices as a tiebreaker
+    if(/(samantha|ava|allison|susan|zoe|nicky|aria|jenny|libby|sonia|karen|serena|moira)/.test(id)) s+=25;
+    if(/desktop/.test(id)) s-=40;                         // old robotic desktop voices
+    if(/david|mark/.test(id)) s-=10;
     if(/en-us/i.test(v.lang)) s+=6;
     if(/en-gb/i.test(v.lang)) s+=4;
     if(v.localService===false) s+=8;                      // cloud voices usually smoother
