@@ -260,8 +260,12 @@
     animation:wiPop .6s ease, wiFloat 1.8s ease-in-out .6s infinite alternate;}
   .wi-word{font-size:clamp(40px,13vw,88px); font-weight:900; letter-spacing:4px; color:#fff;
     text-shadow:0 3px 0 #b8912f, 0 0 22px #ffd16688;}
-  @keyframes wiPop{0%{transform:scale(.3); opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1)}}
-  @keyframes wiFloat{from{transform:translateY(0)}to{transform:translateY(-12px)}}
+  /* Real pictures (Iconify SVG) - sized to 1em so they match emoji everywhere */
+  .pic-svg{display:inline-block; line-height:0; vertical-align:middle;}
+  .pic-svg svg{width:1em; height:1em; display:inline-block; vertical-align:middle;}
+  .pic-loading{display:inline-block; width:1em; height:1em; border:3px solid #ffffff44;
+    border-top-color:#ffd166; border-radius:50%; vertical-align:middle; animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -658,35 +662,135 @@ function speakTest(){ playPhrase('learn'); }
 function renderHome(){
   const t = todaysWords();
   const el=document.getElementById('todayPreview');
-  if(t.length) el.textContent = "Today: "+t.map(w=>w.emoji+" "+w.text).join("   ");
+  if(t.length) el.innerHTML = "Today: "+t.map(w=>picMarkup(w)+" "+w.text).join("&nbsp;&nbsp;&nbsp;");
   else el.innerHTML = 'No words yet — ask a grown-up to add today\'s words in <b>👨‍🚀 Grown-up</b>.';
 }
 
 /* ============================ PARENT ============================ */
 let pendingEmoji="✨", pendingIdx=0;
+let pendingPic=null, pendingPicName=null, pendingCands=[], pendingCandIdx=0, picDebounce=null;
 function guessEmoji(word){
   const w=word.toLowerCase().trim();
   if(EMOJI_MAP[w]) return EMOJI_MAP[w];
   return FALLBACK_EMOJIS[(w.charCodeAt(0)||0)%FALLBACK_EMOJIS.length];
 }
-function previewEmoji(){
-  const w=document.getElementById('newWord').value;
-  pendingEmoji=guessEmoji(w); pendingIdx=0;
-  document.getElementById('emojiPrev').textContent=pendingEmoji;
+
+/* ---------- Free real pictures from the internet (Iconify, no API key) ----------
+   Uses Microsoft's clean, kid-friendly Fluent Emoji (and other open emoji sets).
+   The tiny SVG is stored on the word so it works offline after the first fetch.
+   Emoji stays as a graceful fallback when offline or no picture is found. */
+const PIC_SETS=['fluent-emoji-flat','fluent-emoji','noto','twemoji','openmoji','emojione','flat-color-icons'];
+const ICONIFY='https://api.iconify.design';
+function localName(n){ return String(n).split(':')[1]||''; }
+function pickBestIcon(icons, word){
+  const w=word.toLowerCase();
+  return icons.find(n=>localName(n)===w) || icons[0];   // exact match, else best-ranked
 }
-function cycleEmoji(){
+// Search preferred kid-friendly sets; return a list of "prefix:name" candidates.
+async function fetchIconCandidates(word){
+  const q=encodeURIComponent(word);
+  for(const pfx of PIC_SETS){
+    try{
+      const r=await fetch(`${ICONIFY}/search?query=${q}&prefix=${pfx}&limit=8`);
+      if(!r.ok) continue;
+      const j=await r.json();
+      if(j&&j.icons&&j.icons.length){
+        const best=pickBestIcon(j.icons, word);
+        return [best, ...j.icons.filter(n=>n!==best)].slice(0,8);
+      }
+    }catch(e){ return null; }   // network error -> signal "try again later"
+  }
+  return [];                     // searched fine, nothing matched
+}
+async function fetchIconSvg(name){
+  try{
+    const [pfx,ic]=String(name).split(':');
+    const r=await fetch(`${ICONIFY}/${pfx}/${ic}.svg?height=240`);
+    if(!r.ok) return null;
+    let svg=await r.text();
+    if(!/^\s*<svg/i.test(svg) || /<script/i.test(svg)) return null;  // safety
+    return svg;
+  }catch(e){ return null; }
+}
+// Full fetch for one word: {svg,name} on success, 'none' if nothing matched, null on network error.
+async function fetchWordPicture(word){
+  const cands=await fetchIconCandidates(word);
+  if(cands===null) return null;
+  if(!cands.length) return 'none';
+  const svg=await fetchIconSvg(cands[0]);
+  return svg ? {svg, name:cands[0]} : 'none';
+}
+// Backfill pictures for any words missing one (online only, one at a time).
+let _autoFetching=false;
+async function autoFetchPictures(words, onEach){
+  if(_autoFetching || !navigator.onLine) return;
+  _autoFetching=true;
+  try{
+    for(const w of words){
+      if(w.pic || w._picTried) continue;
+      const r=await fetchWordPicture(w.text);
+      if(r==='none'){ w._picTried=true; save(); }
+      else if(r){ w.pic=r.svg; w.picName=r.name; save(); onEach&&onEach(w); }
+    }
+  } finally { _autoFetching=false; }
+}
+// Picture markup for a word: real SVG if we have one, else the emoji.
+function picMarkup(w){
+  if(w && w.pic) return `<span class="pic-svg">${w.pic}</span>`;
+  return (w&&w.emoji) || '✨';
+}
+function renderPic(el, w){ if(el) el.innerHTML = picMarkup(w); }
+function previewEmoji(){
+  const w=document.getElementById('newWord').value.trim().toLowerCase().replace(/[^a-z]/g,'');
+  pendingEmoji=guessEmoji(w); pendingIdx=0;
+  pendingPic=null; pendingPicName=null; pendingCands=[]; pendingCandIdx=0;
+  const prev=document.getElementById('emojiPrev');
+  prev.textContent=pendingEmoji;
+  clearTimeout(picDebounce);
+  if(!w || !navigator.onLine) return;
+  prev.innerHTML='<span class="pic-loading"></span>';
+  picDebounce=setTimeout(()=>loadPreviewPicture(w), 450);
+}
+function curWordInput(){ return document.getElementById('newWord').value.trim().toLowerCase().replace(/[^a-z]/g,''); }
+async function loadPreviewPicture(w){
+  const cands=await fetchIconCandidates(w);
+  if(curWordInput()!==w) return;                    // user kept typing
+  const prev=document.getElementById('emojiPrev');
+  if(!cands || !cands.length){ prev.textContent=pendingEmoji; return; }
+  pendingCands=cands; pendingCandIdx=0;
+  const svg=await fetchIconSvg(cands[0]);
+  if(curWordInput()!==w) return;
+  if(svg){ pendingPic=svg; pendingPicName=cands[0]; prev.innerHTML=`<span class="pic-svg">${svg}</span>`; }
+  else prev.textContent=pendingEmoji;
+}
+async function cycleEmoji(){
+  const prev=document.getElementById('emojiPrev');
+  // Cycle through real picture options first, then emoji fallbacks.
+  if(pendingCands && pendingCands.length){
+    pendingCandIdx=(pendingCandIdx+1)%pendingCands.length;
+    const name=pendingCands[pendingCandIdx];
+    prev.innerHTML='<span class="pic-loading"></span>';
+    const svg=await fetchIconSvg(name);
+    if(svg){ pendingPic=svg; pendingPicName=name; prev.innerHTML=`<span class="pic-svg">${svg}</span>`; return; }
+  }
+  pendingPic=null; pendingPicName=null;
   pendingIdx=(pendingIdx+1)%FALLBACK_EMOJIS.length;
   pendingEmoji=FALLBACK_EMOJIS[pendingIdx];
-  document.getElementById('emojiPrev').textContent=pendingEmoji;
+  prev.textContent=pendingEmoji;
 }
 function addWord(){
   const inp=document.getElementById('newWord');
   const text=inp.value.trim().toLowerCase().replace(/[^a-z]/g,'');
   if(text.length<1) return;
   if(state.words.some(w=>w.text===text)){ inp.value=''; return; }
-  state.words.push({text, emoji:pendingEmoji, correct:0, wrong:0, mastered:false, added:Date.now()});
-  save(); inp.value=''; document.getElementById('emojiPrev').textContent='✨';
+  const word={text, emoji:pendingEmoji, pic:pendingPic||null, picName:pendingPicName||null,
+    correct:0, wrong:0, mastered:false, added:Date.now()};
+  state.words.push(word);
+  save(); inp.value='';
+  pendingPic=null; pendingPicName=null; pendingCands=[]; pendingEmoji='✨';
+  document.getElementById('emojiPrev').textContent='✨';
   renderParent();
+  if(!word.pic) autoFetchPictures([word], ()=>renderParent());   // fetch in background if needed
 }
 function removeWord(text){
   state.words=state.words.filter(w=>w.text!==text); save(); renderParent();
@@ -736,7 +840,7 @@ function renderParent(){
   if(!state.words.length){ list.innerHTML='<div class="small">No words yet. Add the 2 words from school above.</div>'; }
   [...state.words].sort((a,b)=>b.added-a.added).forEach(w=>{
     const d=document.createElement('div'); d.className='wl-item';
-    d.innerHTML=`<span class="em">${w.emoji}</span>
+    d.innerHTML=`<span class="em">${picMarkup(w)}</span>
       <span class="w">${w.text}</span>
       ${wordStatusBadge(w)}
       <button class="btn ghost" data-say="${w.text}">🔊</button>
@@ -752,6 +856,8 @@ function renderParent(){
     const mastered=state.words.filter(w=>w.mastered).length;
     cnt.textContent=`${total} words saved · ${hot} new 🔥 · ${total-hot-mastered} in review · ${mastered} mastered ✓`;
   }
+  // Auto-fetch real pictures for any words that don't have one yet (online).
+  autoFetchPictures(state.words, ()=>renderParent());
 }
 function resetProgress(){
   if(!confirm("Reset all stars and word progress? Words stay in the list.")) return;
@@ -778,7 +884,7 @@ function renderProgress(){
   const pl=document.getElementById('progressList'); pl.innerHTML='';
   state.words.forEach(w=>{
     const d=document.createElement('div'); d.className='wl-item';
-    d.innerHTML=`<span class="em">${w.emoji}</span><span class="w">${w.text}</span>
+    d.innerHTML=`<span class="em">${picMarkup(w)}</span><span class="w">${w.text}</span>
       ${wordStatusBadge(w)}`;
     pl.appendChild(d);
   });
@@ -849,6 +955,7 @@ function startDaily(){
   }
   G={ queue:q, wi:0, sessionStars:0, startStars:state.stars, stage:0, streak:0, rescued:0 };
   show('game'); updateHud();
+  autoFetchPictures(q);            // grab any missing pictures while he reads the briefing
   if(musicOn) startMusic();
   renderMissionStrip();
   missionBriefing();
@@ -899,7 +1006,7 @@ function startWord(){
   if(G.wi>=G.queue.length){ return endSession(); }
   G.word=G.queue[G.wi];
   G.stage=0; G.streak=0;
-  document.getElementById('gPic').textContent=G.word.emoji;
+  renderPic(document.getElementById('gPic'), G.word);
   startTimer();
   wordIntro(stageListen);
 }
@@ -908,11 +1015,11 @@ function startWord(){
 function wordIntro(done){
   G.stage=0; setDots(0); updateHud();
   const w=G.word.text;
-  document.getElementById('gPic').textContent=G.word.emoji;
+  renderPic(document.getElementById('gPic'), G.word);
   document.getElementById('gInstr').textContent="Look at the picture! 👀";
   document.getElementById('gArea').innerHTML=
     `<div class="word-intro">
-       <div class="wi-pic">${G.word.emoji}</div>
+       <div class="wi-pic">${picMarkup(G.word)}</div>
        <div class="wi-word">${w}</div>
      </div>`;
   document.getElementById('gControls').innerHTML=
@@ -1241,7 +1348,7 @@ const SLATE_LEVELS={
 function stageWrite(){
   G.stage=3; setDots(3); updateHud();
   const w=G.word.text;
-  document.getElementById('gPic').textContent=G.word.emoji;
+  renderPic(document.getElementById('gPic'), G.word);
   document.getElementById('gInstr').textContent="Write each letter with your finger! ✍️";
   document.getElementById('gArea').innerHTML=
     `<div class="slate-wrap">
@@ -1427,7 +1534,7 @@ function celebrate(stars, nearClean){
   else { msg="You got there! Keep listening 👂"; emo="🪐"; }
   document.getElementById('celebEmoji').textContent=emo;
   document.getElementById('celebMsg').innerHTML=`${msg}<br>`+
-    `<span style="font-size:.9em">${G.word.emoji} ${G.word.text}</span><br>`+
+    `<span style="font-size:.9em">${picMarkup(G.word)} ${G.word.text}</span><br>`+
     `<span style="font-size:.7em">${starRow}</span>`;
   document.getElementById('celebrate').classList.add('show');
   confetti(); win(); successBurst();
