@@ -32,7 +32,7 @@ LETTER_SOUNDS = {
     "g": "guh", "h": "huh", "i": "ih", "j": "juh", "k": "kuh", "l": "luh",
     "m": "muh", "n": "nuh", "o": "aw", "p": "puh", "q": "kwuh", "r": "ruh",
     "s": "suh", "t": "tuh", "u": "uh", "v": "vuh", "w": "wuh", "x": "ks",
-    "y": "yuh", "z": "zuh",
+    "y": "yeh", "z": "zzz",
 }
 
 # Class words already covered (kept in sync with CLASS_WORDS in index.html).
