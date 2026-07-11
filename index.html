@@ -106,6 +106,38 @@
   .dot.on{background:var(--accent);}
   .dot.done{background:var(--accent2);}
 
+  /* mission star-rescue strip */
+  .mission-strip{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:2px 8px 0; min-height:26px;}
+  .mission-strip .ms{font-size:22px; filter:grayscale(1) brightness(.6); transition:transform .3s, filter .3s;}
+  .mission-strip .ms.saved{filter:none; transform:scale(1.2);}
+  @keyframes msPop{0%{transform:scale(1)}50%{transform:scale(1.7)}100%{transform:scale(1.2)}}
+  .mission-strip .ms.justSaved{animation:msPop .6s ease;}
+
+  /* music toggle */
+  #musicBtn{position:fixed; top:10px; right:10px; z-index:6; width:44px; height:44px; border-radius:50%;
+    border:none; background:#ffffff22; color:#fff; font-size:20px; cursor:pointer;}
+
+  /* mission briefing */
+  .briefing{display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; padding:10px;}
+  .briefing .title{font-size:clamp(24px,6vw,38px); font-weight:bold;}
+  .briefing .desc{font-size:18px; opacity:.9; max-width:520px;}
+
+  /* finger-writing slate */
+  .slate-wrap{display:flex; flex-direction:column; align-items:center; gap:8px; width:100%;}
+  .slate-word{display:flex; gap:8px; justify-content:center; flex-wrap:wrap;}
+  .slate-word .sw{min-width:34px; height:46px; padding:0 6px; border-radius:10px; background:#ffffff10;
+    display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:bold;
+    text-transform:lowercase; border:2px solid #ffffff22;}
+  .slate-word .sw.cur{border-color:var(--accent); background:#ffd16622;}
+  .slate-word .sw.done{border-color:var(--accent2); background:#06d6a033;}
+  .slate{position:relative; width:min(88vw,420px); height:min(60vh,420px); border-radius:24px;
+    background:#0d1240; border:4px solid #ffffff33; touch-action:none; overflow:hidden;}
+  .slate canvas{position:absolute; inset:0; width:100%; height:100%;}
+  .slate .guide{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:min(52vh,360px); line-height:1; font-weight:bold; text-transform:lowercase;
+    color:#ffffff14; user-select:none; pointer-events:none;}
+  .slate .cover{position:absolute; left:8px; bottom:6px; font-size:13px; opacity:.6;}
+
   /* parent */
   .card{background:#ffffff12; border-radius:20px; padding:16px; margin:10px auto; max-width:640px; width:100%;}
   input[type=text]{
@@ -178,6 +210,7 @@
 </head>
 <body>
 <canvas id="stars"></canvas>
+<button id="musicBtn" onclick="toggleMusic()" title="Music on/off">🎵</button>
 
 <div id="buddy"><div id="buddyBubble"></div><div id="buddyFace">👽</div></div>
 <div id="combo"></div>
@@ -204,6 +237,7 @@
     <div class="starcount">⭐ <span id="starNow">0</span></div>
   </div>
   <div class="stage-dots" id="stageDots"></div>
+  <div class="mission-strip" id="missionStrip"></div>
   <div class="center" style="position:relative; flex:1; padding:0; display:flex; flex-direction:column; width:100%;">
     <div class="pic" id="gPic">🚀</div>
     <div class="instr" id="gInstr"></div>
@@ -337,6 +371,7 @@ function show(id){
   if(id==='home') renderHome();
   // Buddy only appears during the game.
   const b=document.getElementById('buddy'); if(b) b.style.display = (id==='game')?'block':'none';
+  if(id!=='game') stopMusic();
   window.speechSynthesis && speechSynthesis.cancel();
 }
 
@@ -456,7 +491,15 @@ const PHRASE_TEXT = {
   perfect:"Perfect! You did it!", welldone:"Well done!",
   blastoff:"Amazing! You finished all your words! Blast off!",
   listen_watch:"Listen and watch.", try_again:"Let's try again together.",
-  great_job:"Great job!"
+  great_job:"Great job!",
+  mission_start:"Captain! Space Command needs you. Little star friends are lost in space. Spell each word to bring them safely home. Ready? Let's blast off!",
+  mission_next:"Here comes a lost star. Listen closely!",
+  write_now:"Now write the letters with your finger!",
+  next_letter:"Now the next letter.",
+  rescued:"You rescued a star friend! Great work, Captain!",
+  mission_done:"Mission complete! You brought every star friend home. You are a spelling hero!",
+  trace_good:"Beautiful writing!", trace_on:"Trace right on top of the letter.",
+  keep_going:"Keep going, you can do it!"
 };
 
 // Device text-to-speech (fallback for parent-added words / missing clips).
@@ -688,10 +731,39 @@ function startDaily(){
     alert("No words yet on this tablet.\n\nTap “👨\u200d🚀 Grown-up” to add today's words, or use “Load class words”.");
     show('parent'); return;
   }
-  G={ queue:q, wi:0, sessionStars:0, startStars:state.stars, stage:0, streak:0 };
+  G={ queue:q, wi:0, sessionStars:0, startStars:state.stars, stage:0, streak:0, rescued:0 };
   show('game'); updateHud();
-  buddy('👽','happy',"Let's go!");
-  startWord();
+  if(musicOn) startMusic();
+  renderMissionStrip();
+  missionBriefing();
+}
+function renderMissionStrip(){
+  const strip=document.getElementById('missionStrip'); if(!strip) return;
+  strip.innerHTML='';
+  for(let i=0;i<G.queue.length;i++){
+    const s=document.createElement('div');
+    s.className='ms'+(i<G.rescued?' saved':'');
+    s.textContent='⭐'; strip.appendChild(s);
+  }
+}
+function markRescued(i){
+  const strip=document.getElementById('missionStrip'); if(!strip) return;
+  const s=strip.children[i]; if(s){ s.classList.add('saved','justSaved'); }
+}
+function missionBriefing(){
+  setDots(0);
+  document.getElementById('gPic').textContent='🛸';
+  document.getElementById('gInstr').textContent="Space Rescue Mission! 🚀";
+  document.getElementById('gArea').innerHTML=
+    `<div class="briefing">
+       <div class="title">🚀 Space Rescue</div>
+       <div class="desc">${G.queue.length} little star friends are lost in space. Spell each word to bring them safely home, Captain!</div>
+     </div>`;
+  document.getElementById('gControls').innerHTML=
+    `<button class="btn big green" id="cStart">▶ Start Mission</button>`;
+  document.getElementById('cStart').onclick=()=>startWord();
+  buddy('👽','cheer',"Ready, Captain?");
+  playPhrase('mission_start');
 }
 function quitGame(){ G=null; show('home'); }
 function updateHud(){
@@ -964,9 +1036,9 @@ function dayKey(ts){ const d=new Date(ts); return d.getFullYear()+'-'+(d.getMont
 function wordComplete(){
   const wrong = (G.att && G.att.wrong) || 0;
   if(G.stage===2){
-    // Build stage done -> go to real dictation. No mastery credit here.
+    // Build stage done -> finger-writing stage. No mastery credit here.
     G.word.correct++; save(); ding();
-    setTimeout(stageDictation,700);
+    setTimeout(stageWrite,700);
   } else {
     // Dictation done. Reward scales with focus: clean = 3 stars, else fewer.
     const stars = wrong===0 ? 3 : (wrong<=1 ? 2 : 1);
@@ -985,6 +1057,142 @@ function wordComplete(){
   }
 }
 
+/* ---- Stage 3: Finger-writing slate (anti-fluke "prove it") ---- */
+let W=null;
+function stageWrite(){
+  G.stage=3; setDots(3); updateHud();
+  const w=G.word.text;
+  document.getElementById('gPic').textContent=G.word.emoji;
+  document.getElementById('gInstr').textContent="Write each letter with your finger! ✍️";
+  document.getElementById('gArea').innerHTML=
+    `<div class="slate-wrap">
+       <div class="slate-word" id="slateWord"></div>
+       <div class="slate" id="slate">
+         <canvas id="gCan"></canvas>
+         <canvas id="iCan"></canvas>
+         <div class="cover" id="slateHint">trace the glowing letter</div>
+       </div>
+     </div>`;
+  document.getElementById('gControls').innerHTML=
+    `<button class="btn blue" id="cHearW">🔊 Hear</button>
+     <button class="btn ghost" id="cClearW">🧽 Clear</button>`;
+  document.getElementById('cHearW').onclick=()=>speak(w);
+  document.getElementById('cClearW').onclick=()=>{ W&&(W.helps++); clearInk(); };
+  W={ i:0, helps:0, drawing:false, last:null, dpr:1, gc:null, ic:null };
+  renderSlateWord();
+  setupSlate();
+  loadGuide();
+  playPhrase('write_now', ()=>setTimeout(()=>speak(w),150));
+}
+function renderSlateWord(){
+  const row=document.getElementById('slateWord'); if(!row) return;
+  row.innerHTML='';
+  G.word.text.split('').forEach((c,idx)=>{
+    const d=document.createElement('div');
+    d.className='sw'+(idx<W.i?' done':'')+(idx===W.i?' cur':'');
+    d.textContent = idx<=W.i ? c : '•';
+    row.appendChild(d);
+  });
+}
+function setupSlate(){
+  const slate=document.getElementById('slate');
+  const gc=document.getElementById('gCan'), ic=document.getElementById('iCan');
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const rect=slate.getBoundingClientRect();
+  [gc,ic].forEach(cv=>{ cv.width=Math.round(rect.width*dpr); cv.height=Math.round(rect.height*dpr); });
+  const gctx=gc.getContext('2d'); gctx.setTransform(dpr,0,0,dpr,0,0);
+  const ictx=ic.getContext('2d'); ictx.setTransform(dpr,0,0,dpr,0,0);
+  ictx.lineWidth=16; ictx.lineCap='round'; ictx.lineJoin='round';
+  ictx.strokeStyle='#ffd166'; ictx.fillStyle='#ffd166';
+  W.dpr=dpr; W.gc=gc; W.ic=ic; W.gctx=gctx; W.ictx=ictx; W.w=rect.width; W.h=rect.height;
+  const pos=e=>{ const r=slate.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
+  slate.onpointerdown=e=>{ e.preventDefault(); slate.setPointerCapture&&slate.setPointerCapture(e.pointerId);
+    W.drawing=true; W.last=pos(e); const p=W.last; W.ictx.beginPath(); W.ictx.arc(p.x,p.y,8,0,6.29); W.ictx.fill(); };
+  slate.onpointermove=e=>{ if(!W.drawing) return; e.preventDefault(); const p=pos(e);
+    W.ictx.beginPath(); W.ictx.moveTo(W.last.x,W.last.y); W.ictx.lineTo(p.x,p.y); W.ictx.stroke(); W.last=p; evalTrace(false); };
+  slate.onpointerup=e=>{ if(!W.drawing) return; W.drawing=false; evalTrace(true); };
+  slate.onpointercancel=()=>{ W.drawing=false; };
+}
+function loadGuide(){
+  const g=W.gctx; g.clearRect(0,0,W.w,W.h);
+  const ch=G.word.text[W.i]||'';
+  g.save();
+  g.fillStyle='#ffffff22';
+  g.textAlign='center'; g.textBaseline='middle';
+  const size=Math.min(W.w,W.h)*0.78;
+  g.font='bold '+size+'px system-ui,Segoe UI,Arial';
+  g.fillText(ch, W.w/2, W.h/2+size*0.03);
+  g.restore();
+  clearInk();
+  renderSlateWord();
+  const hint=document.getElementById('slateHint'); if(hint) hint.textContent='trace the glowing letter';
+  W.accepting=false;
+}
+function clearInk(){ if(W&&W.ictx) W.ictx.clearRect(0,0,W.w,W.h); }
+let _evalT=0;
+function evalTrace(final){
+  const now=Date.now();
+  if(!final && now-_evalT<120) return;   // throttle live eval
+  _evalT=now;
+  // Downscale both canvases to a small grid and compare alpha masks.
+  const EW=64, EH=64;
+  const ge=document.createElement('canvas'); ge.width=EW; ge.height=EH;
+  const ie=document.createElement('canvas'); ie.width=EW; ie.height=EH;
+  const gx=ge.getContext('2d'), ix=ie.getContext('2d');
+  gx.drawImage(W.gc,0,0,EW,EH); ix.drawImage(W.ic,0,0,EW,EH);
+  const gd=gx.getImageData(0,0,EW,EH).data, id=ix.getImageData(0,0,EW,EH).data;
+  let guideTot=0, inkTot=0, overlap=0;
+  for(let p=3;p<gd.length;p+=4){
+    const gOn=gd[p]>40, iOn=id[p]>40;
+    if(gOn) guideTot++;
+    if(iOn) inkTot++;
+    if(gOn&&iOn) overlap++;
+  }
+  if(guideTot===0) return;
+  const coverage = overlap/guideTot;          // how much of the letter is covered
+  const precision = inkTot? overlap/inkTot : 0; // how much ink stayed on the letter
+  const hint=document.getElementById('slateHint');
+  // Anti-scribble: lots of ink but mostly off the letter.
+  if(final && inkTot>guideTot*0.5 && precision<0.35 && coverage<0.5){
+    W.helps++;
+    if(hint) hint.textContent='stay on the letter ✋';
+    buzz();
+    playPhrase('trace_on');
+    setTimeout(clearInk,600);
+    return;
+  }
+  if(coverage>=0.55 && precision>=0.35){ letterAccepted(); }
+  else if(final && coverage>=0.35){ if(hint) hint.textContent='almost — keep tracing!'; }
+}
+function letterAccepted(){
+  if(W.accepting) return;
+  W.accepting=true; W.drawing=false;
+  const ch=G.word.text[W.i];
+  ping(); sparkle(document.getElementById('slate'), 12);
+  const row=document.getElementById('slateWord');
+  if(row && row.children[W.i]) row.children[W.i].classList.add('done');
+  sayLetter(ch, ()=>{
+    W.i++;
+    if(W.i>=G.word.text.length){ writeComplete(); }
+    else { playPhrase('next_letter', loadGuide); }
+  });
+}
+function writeComplete(){
+  const stars = W.helps===0 ? 3 : (W.helps<=2 ? 2 : 1);
+  const nearClean = W.helps<=2;   // focused writing counts toward mastery
+  G.word.correct++;
+  G.word.lastPracticed=Date.now();
+  if(nearClean){
+    G.word.days = Array.isArray(G.word.days)?G.word.days:[];
+    const today=dayKey(Date.now());
+    if(!G.word.days.includes(today)) G.word.days.push(today);
+    if(G.word.days.length>=3) G.word.mastered=true;
+  }
+  awardStars(stars);
+  save();
+  celebrate(stars, nearClean);
+}
+
 /* ---- Rewards ---- */
 function awardStars(n){
   state.stars+=n; G.sessionStars+=n; save();
@@ -1001,7 +1209,9 @@ function celebrate(stars, nearClean){
   document.getElementById('celebMsg').innerHTML=`${msg}<br><span style="font-size:.7em">${starRow}</span>`;
   document.getElementById('celebrate').classList.add('show');
   confetti(); win();
-  buddy('🥳','cheer',randOf(CHEERS));
+  // Rescue a star friend on the mission map.
+  G.rescued=(G.rescued||0)+1; markRescued(G.rescued-1);
+  buddy('🥳','cheer',"Star rescued! "+randOf(CHEERS));
   sparkle(document.getElementById('gPic'), 14);
   playPhrase(stars===3?'perfect':'welldone', ()=>setTimeout(()=>speak(G.word.text),120));
 }
@@ -1022,8 +1232,8 @@ function endSession(){
   setDots(4);
   win(); confetti();
   rocketBlastOff();
-  buddy('🚀','cheer','Blast off!');
-  setTimeout(()=>playPhrase('blastoff'),400);
+  buddy('🚀','cheer','Mission complete!');
+  setTimeout(()=>playPhrase('mission_done'),400);
 }
 
 /* ============================ FUN FX ============================ */
@@ -1109,6 +1319,44 @@ function ding(){ tone(880,0.12,'sine'); setTimeout(()=>tone(1320,0.18,'sine'),12
 function buzz(){ tone(160,0.18,'square',0.15); }
 function win(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.25,'triangle'),i*140)); }
 
+/* ---- Gentle background space music (procedural, royalty-free) ---- */
+let musicOn = (state.music!==false);   // default on
+let musicNodes=null, musicTimer=null;
+const PENTA=[261.63,293.66,329.63,392.00,440.00,523.25,587.33,659.25]; // C D E G A ...
+function startMusic(){
+  const c=ac(); if(!c||musicNodes) return;
+  try{ c.resume&&c.resume(); }catch(e){}
+  const master=c.createGain(); master.gain.value=0.0001; master.connect(c.destination);
+  master.gain.exponentialRampToValueAtTime(1, c.currentTime+2.5);   // slow fade-in
+  // soft low pad drone
+  const pad=c.createOscillator(), pg=c.createGain();
+  pad.type='sine'; pad.frequency.value=98; pg.gain.value=0.03;
+  pad.connect(pg); pg.connect(master); pad.start();
+  musicNodes={master,pad};
+  const step=()=>{
+    if(!musicNodes) return;
+    const f=PENTA[Math.floor(Math.random()*PENTA.length)];
+    const o=c.createOscillator(), og=c.createGain(), t=c.currentTime;
+    o.type=Math.random()<0.5?'sine':'triangle'; o.frequency.value=f;
+    og.gain.setValueAtTime(0.0001,t);
+    og.gain.exponentialRampToValueAtTime(0.05,t+0.4);
+    og.gain.exponentialRampToValueAtTime(0.0001,t+1.8);
+    o.connect(og); og.connect(musicNodes.master); o.start(t); o.stop(t+2);
+    musicTimer=setTimeout(step, 1000+Math.random()*1100);
+  };
+  step();
+}
+function stopMusic(){
+  if(musicTimer){ clearTimeout(musicTimer); musicTimer=null; }
+  if(musicNodes){ try{musicNodes.pad.stop();}catch(e){} try{musicNodes.master.disconnect();}catch(e){} musicNodes=null; }
+}
+function toggleMusic(){
+  musicOn=!musicOn; state.music=musicOn; save();
+  refreshMusicBtn();
+  if(musicOn) startMusic(); else stopMusic();
+}
+function refreshMusicBtn(){ const b=document.getElementById('musicBtn'); if(b) b.textContent=musicOn?'🎵':'🔇'; }
+
 function confetti(){
   const emo=["🎉","⭐","🚀","🌟","✨","🪐","🎈"];
   for(let i=0;i<26;i++){
@@ -1177,6 +1425,7 @@ if(!state.classSeeded && !state.words.length){ seedClassWords(); }
 state.classSeeded = true;
 save();
 
+refreshMusicBtn();
 renderHome();
 </script>
 </body>

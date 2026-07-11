@@ -48,6 +48,16 @@ PHRASES = {
     "listen_watch": "Listen and watch.",
     "try_again": "Let's try again together.",
     "great_job": "Great job!",
+    # ----- Space rescue mission narration -----
+    "mission_start": "Captain! Space Command needs you. Little star friends are lost in space. Spell each word to bring them safely home. Are you ready? Let's blast off!",
+    "mission_next": "Here comes a lost star. Listen closely!",
+    "write_now": "Now write the letters with your finger!",
+    "next_letter": "Now the next letter.",
+    "rescued": "You rescued a star friend! Great work, Captain!",
+    "mission_done": "Mission complete! You brought every star friend home. You are a spelling hero!",
+    "trace_good": "Beautiful writing!",
+    "trace_on": "Trace right on top of the letter.",
+    "keep_going": "Keep going, you can do it!",
 }
 
 
