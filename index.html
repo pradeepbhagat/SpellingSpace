@@ -1110,16 +1110,18 @@ function setupSlate(){
   const slate=document.getElementById('slate');
   const gc=document.getElementById('gCan'), ic=document.getElementById('iCan');
   const dpr=Math.min(window.devicePixelRatio||1,2);
-  const rect=slate.getBoundingClientRect();
+  // Measure the canvas's OWN box (inside the slate border) so the ink lines up
+  // exactly under the finger — measuring the slate box adds the border offset.
+  const rect=ic.getBoundingClientRect();
   [gc,ic].forEach(cv=>{ cv.width=Math.round(rect.width*dpr); cv.height=Math.round(rect.height*dpr); });
   const gctx=gc.getContext('2d'); gctx.setTransform(dpr,0,0,dpr,0,0);
   const ictx=ic.getContext('2d'); ictx.setTransform(dpr,0,0,dpr,0,0);
-  ictx.lineWidth=16; ictx.lineCap='round'; ictx.lineJoin='round';
+  ictx.lineWidth=18; ictx.lineCap='round'; ictx.lineJoin='round';
   ictx.strokeStyle='#ffd166'; ictx.fillStyle='#ffd166';
   W.dpr=dpr; W.gc=gc; W.ic=ic; W.gctx=gctx; W.ictx=ictx; W.w=rect.width; W.h=rect.height;
-  const pos=e=>{ const r=slate.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
+  const pos=e=>{ const r=ic.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
   slate.onpointerdown=e=>{ e.preventDefault(); slate.setPointerCapture&&slate.setPointerCapture(e.pointerId);
-    W.drawing=true; W.last=pos(e); const p=W.last; W.ictx.beginPath(); W.ictx.arc(p.x,p.y,8,0,6.29); W.ictx.fill(); };
+    W.drawing=true; W.last=pos(e); const p=W.last; W.ictx.beginPath(); W.ictx.arc(p.x,p.y,9,0,6.29); W.ictx.fill(); };
   slate.onpointermove=e=>{ if(!W.drawing) return; e.preventDefault(); const p=pos(e);
     W.ictx.beginPath(); W.ictx.moveTo(W.last.x,W.last.y); W.ictx.lineTo(p.x,p.y); W.ictx.stroke(); W.last=p; evalTrace(false); };
   slate.onpointerup=e=>{ if(!W.drawing) return; W.drawing=false; evalTrace(true); };
@@ -1131,19 +1133,22 @@ function loadGuide(){
   const size=Math.min(W.w,W.h)*0.78;
   // Faint visible guide the child traces over.
   g.save();
-  g.fillStyle='#ffffff22';
+  g.fillStyle='#ffffff40';
   g.textAlign='center'; g.textBaseline='middle';
   g.font='bold '+size+'px system-ui,Segoe UI,Arial';
   g.fillText(ch, W.w/2, W.h/2+size*0.03);
   g.restore();
-  // Full-opacity mask (offscreen) used only for coverage detection.
+  // Detection mask: render the letter full-opacity at the SAME size/position as
+  // the visible guide (on a W×H offscreen), then downscale to 64×64 exactly like
+  // the ink is downscaled, so mask and finger-ink line up on any canvas shape.
   const EW=64, EH=64;
+  const off=document.createElement('canvas'); off.width=Math.max(1,Math.round(W.w)); off.height=Math.max(1,Math.round(W.h));
+  const ox=off.getContext('2d');
+  ox.fillStyle='#fff'; ox.textAlign='center'; ox.textBaseline='middle';
+  ox.font='bold '+size+'px system-ui,Segoe UI,Arial';
+  ox.fillText(ch, W.w/2, W.h/2+size*0.03);
   const m=document.createElement('canvas'); m.width=EW; m.height=EH;
-  const mx=m.getContext('2d');
-  mx.fillStyle='#fff'; mx.textAlign='center'; mx.textBaseline='middle';
-  const msize=EH*0.78;
-  mx.font='bold '+msize+'px system-ui,Segoe UI,Arial';
-  mx.fillText(ch, EW/2, EH/2+msize*0.03);
+  const mx=m.getContext('2d'); mx.drawImage(off,0,0,EW,EH);
   const md=mx.getImageData(0,0,EW,EH).data;
   const base=new Uint8Array(EW*EH); let tot=0;
   const bx=[], by=[];
