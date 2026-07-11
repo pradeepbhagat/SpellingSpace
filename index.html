@@ -1146,17 +1146,17 @@ function loadGuide(){
   mx.fillText(ch, EW/2, EH/2+msize*0.03);
   const md=mx.getImageData(0,0,EW,EH).data;
   const base=new Uint8Array(EW*EH); let tot=0;
-  for(let p=3,q=0;p<md.length;p+=4,q++){ if(md[p]>60){ base[q]=1; tot++; } }
-  // Dilate the letter into a generous "on target" zone so a kid's rough,
-  // wobbly strokes still count as tracing the letter.
-  const R=4, dmask=new Uint8Array(EW*EH); let dtot=0;
-  for(let y=0;y<EH;y++){ for(let x=0;x<EW;x++){
-    if(!base[y*EW+x]) continue;
-    for(let dy=-R;dy<=R;dy++){ const ny=y+dy; if(ny<0||ny>=EH) continue;
-      for(let dx=-R;dx<=R;dx++){ const nx=x+dx; if(nx<0||nx>=EW) continue;
-        const idx=ny*EW+nx; if(!dmask[idx]){ dmask[idx]=1; dtot++; } } }
-  }}
-  W.mask=dmask; W.maskTot=dtot; W.baseTot=tot; W.EW=EW; W.EH=EH; W.tries=0;
+  const bx=[], by=[];
+  for(let q=0;q<EW*EH;q++){ if(md[q*4+3]>60){ base[q]=1; tot++; bx.push(q%EW); by.push((q/EW)|0); } }
+  // Dilate the letter into an "on target" zone: ink landing here counts as
+  // trying to write the letter (anti-scribble precision check).
+  const R=4, dmask=new Uint8Array(EW*EH);
+  for(let i=0;i<bx.length;i++){
+    for(let dy=-R;dy<=R;dy++){ const ny=by[i]+dy; if(ny<0||ny>=EH) continue;
+      for(let dx=-R;dx<=R;dx++){ const nx=bx[i]+dx; if(nx<0||nx>=EW) continue;
+        dmask[ny*EW+nx]=1; } }
+  }
+  W.mask=dmask; W.baseX=bx; W.baseY=by; W.baseTot=tot; W.EW=EW; W.EH=EH; W.tries=0;
   clearInk();
   renderSlateWord();
   const hint=document.getElementById('slateHint'); if(hint) hint.textContent='trace the glowing letter';
@@ -1166,39 +1166,45 @@ function clearInk(){ if(W&&W.ictx) W.ictx.clearRect(0,0,W.w,W.h); }
 let _evalT=0;
 function evalTrace(final){
   const now=Date.now();
-  if(!final && now-_evalT<120) return;   // throttle live eval
+  if(!final && now-_evalT<150) return;   // throttle live eval
   _evalT=now;
-  if(!W.mask || !W.maskTot) return;
+  if(!W.baseTot) return;
   const EW=W.EW, EH=W.EH;
   const ie=document.createElement('canvas'); ie.width=EW; ie.height=EH;
   const ix=ie.getContext('2d');
   ix.drawImage(W.ic,0,0,EW,EH);
   const id=ix.getImageData(0,0,EW,EH).data;
-  let inkTot=0, overlap=0;
-  for(let p=3,q=0;p<id.length;p+=4,q++){
-    if(id[p]>40){ inkTot++; if(W.mask[q]) overlap++; }
-  }
+  const ink=new Uint8Array(EW*EH);
+  let inkTot=0, onTarget=0;
+  for(let q=0;q<EW*EH;q++){ if(id[q*4+3]>40){ ink[q]=1; inkTot++; if(W.mask[q]) onTarget++; } }
   if(inkTot===0) return;
-  const precision = overlap/inkTot;        // fraction of their ink on/near the letter zone
-  const enough = inkTot >= Math.max(14, W.baseTot*0.15); // drew a real amount
+  // Coverage: fraction of the LETTER that has ink near it (thin lines ok).
+  const CR=3; let covered=0;
+  for(let i=0;i<W.baseX.length;i++){
+    const x=W.baseX[i], y=W.baseY[i]; let hit=false;
+    for(let dy=-CR;dy<=CR && !hit;dy++){ const ny=y+dy; if(ny<0||ny>=EH) continue;
+      for(let dx=-CR;dx<=CR;dx++){ const nx=x+dx; if(nx<0||nx>=EW) continue;
+        if(ink[ny*EW+nx]){ hit=true; break; } } }
+    if(hit) covered++;
+  }
+  const coverage = covered/W.baseTot;   // how much of the letter he traced
+  const precision = onTarget/inkTot;    // how much of his ink is on the letter
   const hint=document.getElementById('slateHint');
-  // Kid-forgiving accept: enough ink AND most of it lands on the letter zone.
-  if(enough && precision>=0.45){ letterAccepted(); return; }
+  if(hint && coverage>0.1) hint.textContent = Math.round(coverage*100)+'% traced';
+  // Must actually trace most of the letter, and not be scribbling everywhere.
+  if(coverage>=0.62 && precision>=0.4){ letterAccepted(); return; }
   if(!final) return;
-  // On lift, decide how to nudge.
+  // On lift: nudge based on what happened.
   W.tries=(W.tries||0)+1;
-  if(precision<0.35 && inkTot>W.baseTot*0.4){
-    // Lots of ink mostly off the letter -> gentle "stay on it" nudge.
+  if(precision<0.35 && inkTot>W.baseTot*0.5){
     W.helps++;
     if(hint) hint.textContent='stay on the letter ✋';
     buzz(); playPhrase('trace_on');
     setTimeout(clearInk,700);
     return;
   }
-  if(enough && precision>=0.3){ letterAccepted(); return; } // close enough, let it pass
-  // After a couple of honest attempts, accept so a kid is never stuck.
-  if(W.tries>=3 && inkTot>=10){ letterAccepted(); return; }
-  if(hint) hint.textContent='almost — keep tracing!';
+  if(coverage>=0.5 && precision>=0.35){ letterAccepted(); return; } // close enough
+  if(hint) hint.textContent='keep tracing the whole letter ✍️';
   playPhrase('keep_going');
 }
 function letterAccepted(){
