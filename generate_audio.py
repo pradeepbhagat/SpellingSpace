@@ -25,15 +25,17 @@ LETTER_NAMES = {
 }
 
 # Letter SOUNDS (phonics) - the sound each letter makes, spelled so the neural
-# voice says the phoneme (with a light schwa for stop consonants, e.g. "buh"),
-# not the letter name. This is how a young child sounds out a word.
+# voice says the phoneme. Fricatives/continuants are held (pure "sss", "fff"),
+# while stops carry a light schwa ("buh"). This is how a child sounds out a word.
 LETTER_SOUNDS = {
-    "a": "ah", "b": "buh", "c": "kuh", "d": "duh", "e": "eh", "f": "fuh",
-    "g": "guh", "h": "huh", "i": "ih", "j": "juh", "k": "kuh", "l": "luh",
-    "m": "muh", "n": "nuh", "o": "aw", "p": "puh", "q": "kwuh", "r": "ruh",
-    "s": "suh", "t": "tuh", "u": "uh", "v": "vuh", "w": "wuh", "x": "ks",
+    "a": "ah", "b": "buh", "c": "kuh", "d": "duh", "e": "eh", "f": "fff",
+    "g": "guh", "h": "huh", "i": "ih", "j": "juh", "k": "kuh", "l": "lll",
+    "m": "mmm", "n": "nnn", "o": "aw", "p": "puh", "q": "kwuh", "r": "rrr",
+    "s": "sss", "t": "tuh", "u": "uh", "v": "vvv", "w": "wuh", "x": "ks",
     "y": "yeh", "z": "zzz",
 }
+# Stop consonants read crisper (no long drawl); continuants can stretch a little.
+STOP_LETTERS = {"b", "c", "d", "g", "j", "k", "p", "q", "t", "x"}
 
 # Class words already covered (kept in sync with CLASS_WORDS in index.html).
 WORDS = [
@@ -104,7 +106,9 @@ async def main():
         await gen(name, os.path.join(OUT, f"letter_{l}.mp3"), rate="-12%")
     print("Letter sounds (phonics):")
     for l, snd in LETTER_SOUNDS.items():
-        await gen(snd, os.path.join(OUT, f"sound_{l}.mp3"), rate="-18%")
+        # Stops crisp (+0%); short vowels & continuants slightly slowed for clarity.
+        rate = "+0%" if l in STOP_LETTERS else "-6%"
+        await gen(snd, os.path.join(OUT, f"sound_{l}.mp3"), rate=rate)
     print(f"Words ({len(all_words)}):")
     for w in all_words:
         await gen(w, os.path.join(OUT, f"word_{w}.mp3"), rate="-6%")
