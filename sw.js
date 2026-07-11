@@ -2,7 +2,7 @@
    Network-first for the app files so a home-screen (PWA) install always gets
    the latest version when online, and still works offline as a fallback.
    Bump CACHE_VERSION whenever you want to force-clear old caches. */
-const CACHE_VERSION = 'spelling-space-v14';
+const CACHE_VERSION = 'spelling-space-v15';
 const ASSETS = [
   './',
   './index.html',

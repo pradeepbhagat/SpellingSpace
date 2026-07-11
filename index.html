@@ -1250,11 +1250,14 @@ function letterAccepted(){
   ping(); sparkle(document.getElementById('slate'), 12);
   const row=document.getElementById('slateWord');
   if(row && row.children[W.i]) row.children[W.i].classList.add('done');
-  sayLetter(ch, ()=>{
-    W.i++;
-    if(W.i>=G.word.text.length){ writeComplete(); }
-    else { playPhrase('next_letter', loadGuide); }
-  });
+  W.i++;
+  if(W.i>=G.word.text.length){
+    sayLetter(ch, writeComplete);   // last letter: speak, then finish
+  } else {
+    // Advance the guide immediately for a snappy feel; say the letter over it.
+    loadGuide();
+    sayLetter(ch);
+  }
 }
 function writeComplete(){
   const stars = W.helps===0 ? 3 : (W.helps<=2 ? 2 : 1);
