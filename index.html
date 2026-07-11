@@ -273,6 +273,16 @@
       (woven between new words, lower priority). Tap once — duplicates are skipped.</div>
   </div>
   <div class="card">
+    <h2 style="margin:0">✍️ Writing slate difficulty</h2>
+    <div class="small">How neatly he must trace each letter before it moves on.
+      Start with <b>Easy</b> and raise it as his writing improves.</div>
+    <div class="row" id="slateLevelRow" style="gap:8px;margin-top:10px">
+      <button class="btn ghost lvl" data-lvl="easy" onclick="setSlateLevel('easy')">😊 Easy</button>
+      <button class="btn ghost lvl" data-lvl="normal" onclick="setSlateLevel('normal')">🙂 Normal</button>
+      <button class="btn ghost lvl" data-lvl="strict" onclick="setSlateLevel('strict')">🧐 Strict</button>
+    </div>
+  </div>
+  <div class="card">
     <div class="row" style="justify-content:space-between">
       <h2 style="margin:0">📋 Word list</h2>
       <button class="btn ghost" onclick="speakTest()">🔊 Test voice</button>
@@ -617,6 +627,19 @@ function loadClassWords(){
   save(); renderParent();
   speak(added? "Added "+added+" class words." : "Class words already added.");
 }
+function setSlateLevel(lvl){
+  state.slateLevel=lvl; save(); highlightSlateLevel();
+  const names={easy:'Easy',normal:'Normal',strict:'Strict'};
+  speak("Writing set to "+(names[lvl]||lvl));
+}
+function highlightSlateLevel(){
+  const cur=state.slateLevel||'normal';
+  document.querySelectorAll('#slateLevelRow .lvl').forEach(b=>{
+    const on=b.dataset.lvl===cur;
+    b.classList.toggle('green', on);
+    b.classList.toggle('ghost', !on);
+  });
+}
 function wordStatusBadge(w){
   if(w.mastered) return '<span class="badge mastered">Mastered ✓</span>';
   if(isHot(w)) return '<span class="badge" style="background:#ef476f;color:#fff">New 🔥</span>';
@@ -624,6 +647,7 @@ function wordStatusBadge(w){
 }
 function renderParent(){
   loadVoices();
+  highlightSlateLevel();
   const list=document.getElementById('parentList');
   list.innerHTML='';
   if(!state.words.length){ list.innerHTML='<div class="small">No words yet. Add the 2 words from school above.</div>'; }
@@ -1071,6 +1095,13 @@ function wordComplete(){
 
 /* ---- Stage 3: Finger-writing slate (anti-fluke "prove it") ---- */
 let W=null;
+// Difficulty presets: cov=letter coverage needed, prec=ink-on-letter needed,
+// cr=tolerance radius (bigger = more forgiving of wobble).
+const SLATE_LEVELS={
+  easy:  {cov:0.60, prec:0.35, cr:3},
+  normal:{cov:0.78, prec:0.45, cr:2},
+  strict:{cov:0.90, prec:0.55, cr:2}
+};
 function stageWrite(){
   G.stage=3; setDots(3); updateHud();
   const w=G.word.text;
@@ -1183,8 +1214,9 @@ function evalTrace(final){
   let inkTot=0, onTarget=0;
   for(let q=0;q<EW*EH;q++){ if(id[q*4+3]>40){ ink[q]=1; inkTot++; if(W.mask[q]) onTarget++; } }
   if(inkTot===0) return;
-  // Coverage: fraction of the LETTER that has ink near it (thin lines ok).
-  const CR=3; let covered=0;
+  // Coverage: fraction of the LETTER shape that has ink close to it.
+  const D=SLATE_LEVELS[state.slateLevel||'normal']||SLATE_LEVELS.normal;
+  const CR=D.cr; let covered=0;
   for(let i=0;i<W.baseX.length;i++){
     const x=W.baseX[i], y=W.baseY[i]; let hit=false;
     for(let dy=-CR;dy<=CR && !hit;dy++){ const ny=y+dy; if(ny<0||ny>=EH) continue;
@@ -1195,9 +1227,9 @@ function evalTrace(final){
   const coverage = covered/W.baseTot;   // how much of the letter he traced
   const precision = onTarget/inkTot;    // how much of his ink is on the letter
   const hint=document.getElementById('slateHint');
-  if(hint && coverage>0.1) hint.textContent = Math.round(coverage*100)+'% traced';
-  // Must actually trace most of the letter, and not be scribbling everywhere.
-  if(coverage>=0.62 && precision>=0.4){ letterAccepted(); return; }
+  if(hint) hint.textContent = Math.round(coverage*100)+'% traced';
+  // Must trace most of the letter AND keep ink mostly on it (no scribble win).
+  if(coverage>=D.cov && precision>=D.prec){ letterAccepted(); return; }
   if(!final) return;
   // On lift: nudge based on what happened.
   W.tries=(W.tries||0)+1;
@@ -1208,7 +1240,6 @@ function evalTrace(final){
     setTimeout(clearInk,700);
     return;
   }
-  if(coverage>=0.5 && precision>=0.35){ letterAccepted(); return; } // close enough
   if(hint) hint.textContent='keep tracing the whole letter ✍️';
   playPhrase('keep_going');
 }
