@@ -51,18 +51,34 @@ PHRASES = {
 }
 
 
+def load_words():
+    """Words to voice: essentials below + optional words.txt dictionary."""
+    words = set(WORDS)
+    path = os.path.join(os.path.dirname(__file__), "words.txt")
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                w = "".join(ch for ch in line.strip().lower() if ch.isalpha())
+                if 1 <= len(w) <= 12:
+                    words.add(w)
+    return sorted(words)
+
+
 async def gen(text, path, rate="-8%"):
+    if os.path.exists(path):        # idempotent: skip clips we already have
+        return
     await edge_tts.Communicate(text, VOICE, rate=rate).save(path)
     print("  ", os.path.basename(path), text)
 
 
 async def main():
     os.makedirs(OUT, exist_ok=True)
+    all_words = load_words()
     print("Letters:")
     for l, name in LETTER_NAMES.items():
         await gen(name, os.path.join(OUT, f"letter_{l}.mp3"), rate="-12%")
-    print("Words:")
-    for w in sorted(set(WORDS)):
+    print(f"Words ({len(all_words)}):")
+    for w in all_words:
         await gen(w, os.path.join(OUT, f"word_{w}.mp3"), rate="-6%")
     print("Phrases:")
     for slug, text in PHRASES.items():
@@ -70,7 +86,7 @@ async def main():
 
     # Emit a JS manifest (array of clip keys) for the app to know what exists.
     keys = ([f"letter_{l}" for l in LETTER_NAMES]
-            + [f"word_{w}" for w in sorted(set(WORDS))]
+            + [f"word_{w}" for w in all_words]
             + [f"phrase_{s}" for s in PHRASES])
     manifest = "window.AUDIO_CLIPS=" + str(keys).replace("'", '"') + ";\n"
     with open(os.path.join(OUT, "manifest.js"), "w", encoding="utf-8") as f:
