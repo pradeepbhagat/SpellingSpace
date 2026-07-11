@@ -48,6 +48,7 @@
   .btn.blue{background:var(--blue); box-shadow:0 6px 0 #2a93b8, 0 10px 20px #0006;}
   .btn.pink{background:var(--pink); color:#fff; box-shadow:0 6px 0 #a83350, 0 10px 20px #0006;}
   .btn.ghost{background:#ffffff22; color:#fff; box-shadow:none; font-weight:normal;}
+  .btn:disabled,.btn.locked{opacity:.4; filter:grayscale(.6); cursor:not-allowed; box-shadow:none; transform:none;}
   .row{display:flex; flex-wrap:wrap; align-items:center; justify-content:center;}
 
   .topbar{display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;}
@@ -831,14 +832,30 @@ function stageListen(){
   w.split('').forEach(c=>{ const s=document.createElement('div'); s.className='l'; s.textContent=c; ll.appendChild(s); });
   document.getElementById('gControls').innerHTML=
     `<button class="btn blue" id="cAgain">🔊 Again</button>
-     <button class="btn green" id="cNext">Next ▶</button>`;
+     <button class="btn green" id="cNext" disabled>Next ▶</button>`;
   document.getElementById('cAgain').onclick=playListen;
-  document.getElementById('cNext').onclick=stageTap;
+  document.getElementById('cNext').onclick=()=>{ if(!G.listenDone) return; stageTap(); };
   buddy('👽','happy',"Listen, Captain!");
   setTimeout(()=>playPhrase('do_listen', ()=>setTimeout(playListen,300)),400);
 }
+function lockNext(){
+  G.listenDone=false;
+  const n=document.getElementById('cNext');
+  if(n){ n.disabled=true; n.textContent='Listen… 👂'; }
+  // Safety net: never leave him stuck if audio is blocked/slow.
+  clearTimeout(G.listenSafety);
+  const secs=Math.max(6,(G.word.text.length*2)+5);
+  G.listenSafety=setTimeout(()=>{ if(G.stage===0) unlockNext(); }, secs*1000);
+}
+function unlockNext(){
+  clearTimeout(G.listenSafety);
+  G.listenDone=true;
+  const n=document.getElementById('cNext');
+  if(n){ n.disabled=false; n.textContent='Next ▶'; sparkle(n,6); }
+}
 function playListen(){
   const ll=document.getElementById('ll'); if(!ll) return;
+  lockNext();
   const kids=[...ll.children]; kids.forEach(k=>k.classList.remove('on','done'));
   const w=G.word.text;
   speak(w,{cb:()=>{
@@ -846,7 +863,7 @@ function playListen(){
       kids.forEach(k=>k.classList.remove('on'));
       if(kids[i]){ kids[i].classList.add('on'); }
       if(i>0&&kids[i-1]) kids[i-1].classList.add('done');
-    },()=>{ kids.forEach(k=>k.classList.add('done')); setTimeout(()=>speak(w),200); });
+    },()=>{ kids.forEach(k=>k.classList.add('done')); setTimeout(()=>speak(w,{cb:unlockNext}),200); });
   }});
 }
 
