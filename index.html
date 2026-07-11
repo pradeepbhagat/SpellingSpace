@@ -451,6 +451,11 @@ const AUDIO_BASE = 'audio/';
 // later clip play on iOS, and keeps playback nicely sequential.
 let player = null;
 function getPlayer(){ if(!player){ player = new Audio(); player.preload='auto'; } return player; }
+// Stop every audio channel so a bundled clip and device TTS can never overlap.
+function stopAllAudio(){
+  if(player){ try{ player.onended=player.onerror=null; player.pause(); }catch(e){} }
+  if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
+}
 let audioUnlocked = false;
 const SILENCE = 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA';
 function unlockAudio(){
@@ -464,6 +469,7 @@ function playClip(key, opts){
   opts=opts||{};
   return new Promise(resolve=>{
     if(!CLIPS.has(key)){ resolve(false); return; }
+    stopAllAudio();
     const p=getPlayer();
     p.onended=()=>{ p.onended=p.onerror=null; resolve(true); };
     p.onerror=()=>{ p.onended=p.onerror=null; resolve(false); };
@@ -511,7 +517,7 @@ function ttsSpeak(text, opts){
   const rate=opts.rate!=null?opts.rate:0.95, pitch=opts.pitch!=null?opts.pitch:1.0;
   const cb=opts.cb||null, queue=!!opts.queue;
   if(!('speechSynthesis' in window)){ cb&&cb(); return; }
-  if(!queue) speechSynthesis.cancel();
+  if(!queue) stopAllAudio();
   const u=new SpeechSynthesisUtterance(text);
   const v=pickVoice(); if(v) u.voice=v;
   u.rate=rate; u.pitch=pitch; u.volume=1; u.lang=(v&&v.lang)||'en-US';
