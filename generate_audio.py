@@ -77,6 +77,8 @@ PHRASES = {
     "do_build": "Beam the letters home! Slide each one into its box to build the word.",
     # ----- Dual-coding: bind the picture's meaning to the word before spelling -----
     "this_word_is": "Look at the picture! This word is...",
+    # ----- Star / sight words: learned by heart, not by picture -----
+    "star_word": "Here is a special star word! We learn it by heart. Watch and remember...",
 }
 
 

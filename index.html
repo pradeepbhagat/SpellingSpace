@@ -266,6 +266,17 @@
   .pic-loading{display:inline-block; width:1em; height:1em; border:3px solid #ffffff44;
     border-top-color:#ffd166; border-radius:50%; vertical-align:middle; animation:spin .8s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg)}}
+  /* Star / sight words (the, and, this, is...) - learned by heart with a symbol + gesture */
+  .word-intro.star .wi-pic{animation:wiPop .6s ease, starGlow 1.5s ease-in-out .6s infinite alternate;}
+  .star-sym{filter:drop-shadow(0 4px 10px #ffd16688);}
+  .wi-badge{font-size:clamp(16px,4.6vw,26px); font-weight:900; color:#241533;
+    background:linear-gradient(#ffe58a,#ffc93c); padding:5px 18px; border-radius:999px;
+    letter-spacing:1px; box-shadow:0 4px 0 #b8871f, 0 0 22px #ffd16688;}
+  .wi-cue{font-size:clamp(15px,4.2vw,23px); color:#ffe9a8; font-weight:700;
+    max-width:540px; text-align:center; line-height:1.35; margin-top:2px;}
+  @keyframes starGlow{
+    from{filter:drop-shadow(0 6px 10px #0007) drop-shadow(0 0 6px #ffd16644)}
+    to{filter:drop-shadow(0 10px 18px #0007) drop-shadow(0 0 26px #ffd166cc)}}
 </style>
 </head>
 <body>
@@ -583,7 +594,8 @@ const PHRASE_TEXT = {
   do_listen:"Step one, Captain! Listen closely and watch each letter light up.",
   do_tap:"Catch the letters! Tap each glowing letter, in order, from the start.",
   do_build:"Beam the letters home! Slide each one into its box to build the word.",
-  this_word_is:"Look at the picture! This word is..."
+  this_word_is:"Look at the picture! This word is...",
+  star_word:"Here is a special star word! We learn it by heart. Watch and remember..."
 };
 
 // Device text-to-speech (fallback for parent-added words / missing clips).
@@ -675,6 +687,122 @@ function guessEmoji(word){
   return FALLBACK_EMOJIS[(w.charCodeAt(0)||0)%FALLBACK_EMOJIS.length];
 }
 
+/* ---------- Star Words (sight / "heart" words) ----------
+   Words like the, and, this, is, to CANNOT be drawn as a picture. Young readers
+   learn them BY HEART using a symbol + a gesture + a tiny sentence, not a
+   literal image (this is how schools teach "tricky / sight words"). Each entry:
+   sym = a meaningful symbol, cue = a short gesture sentence the child (and
+   grown-up) can act out and say aloud. These words skip the internet picture
+   fetch and show the symbol + a "⭐ Star Word" badge instead. */
+const STAR_WORDS={
+  // being / joining
+  the:{sym:'⭐',cue:"Our special star word. Point and say: the!"},
+  a:{sym:'1️⃣',cue:"A means one. Hold up one finger: a!"},
+  an:{sym:'1️⃣',cue:"An means one. Say: an apple!"},
+  and:{sym:'🤝',cue:"Put your hands together: and! Bread AND jam."},
+  but:{sym:'✋',cue:"Stop hand up: but!"},
+  or:{sym:'🔀',cue:"This OR that? Wiggle both hands: or!"},
+  is:{sym:'🟰',cue:"It IS the same. Say: is!"},
+  am:{sym:'🙋',cue:"I AM here! Raise your hand: am!"},
+  are:{sym:'🙌',cue:"We ARE ready! Both hands up: are!"},
+  was:{sym:'⏪',cue:"Before, long ago: was."},
+  were:{sym:'⏪',cue:"Before, long ago: were."},
+  be:{sym:'🐝',cue:"Sounds like a bee: be!"},
+  // pointing / places
+  this:{sym:'👉',cue:"Point CLOSE and say: this one!"},
+  that:{sym:'👈',cue:"Point FAR away and say: that one!"},
+  these:{sym:'👉',cue:"Point to many close ones: these!"},
+  those:{sym:'👈',cue:"Point to many far ones: those!"},
+  here:{sym:'📍',cue:"Tap the ground: here!"},
+  there:{sym:'👉',cue:"Point over there: there!"},
+  where:{sym:'🧭',cue:"Look around: where is it?"},
+  // going / places
+  to:{sym:'➡️',cue:"Going TO. Point forward: to!"},
+  from:{sym:'⬅️',cue:"Coming FROM. Point back: from!"},
+  into:{sym:'📥',cue:"Go inside: into!"},
+  of:{sym:'🧩',cue:"A piece OF something: of."},
+  in:{sym:'📦',cue:"Hands inside the box: in!"},
+  on:{sym:'⬆️',cue:"Hand on top: on!"},
+  at:{sym:'📍',cue:"Right at this spot: at!"},
+  up:{sym:'⬆️',cue:"Reach up high: up!"},
+  down:{sym:'⬇️',cue:"Point down low: down!"},
+  out:{sym:'🚪',cue:"Step out: out!"},
+  off:{sym:'🔌',cue:"Switch off: off!"},
+  over:{sym:'🌈',cue:"Arm over the top: over!"},
+  under:{sym:'🌂',cue:"Duck under: under!"},
+  with:{sym:'🤝',cue:"Together WITH a friend: with!"},
+  for:{sym:'🎁',cue:"This is FOR you: for!"},
+  by:{sym:'📍',cue:"Right next by: by!"},
+  // pronouns
+  i:{sym:'☝️',cue:"That's me! Point to yourself: I!"},
+  me:{sym:'👇',cue:"Point to your chest: me!"},
+  my:{sym:'🫳',cue:"That's mine: my!"},
+  you:{sym:'👉',cue:"Point to a friend: you!"},
+  we:{sym:'👨‍👩‍👦',cue:"All of us together: we!"},
+  he:{sym:'👦',cue:"HE is a boy: he."},
+  she:{sym:'👧',cue:"SHE is a girl: she."},
+  it:{sym:'👉',cue:"Point at the thing: it!"},
+  they:{sym:'👥',cue:"All of them: they!"},
+  them:{sym:'👥',cue:"All of them: them!"},
+  us:{sym:'👨‍👩‍👦',cue:"All of us: us!"},
+  him:{sym:'👦',cue:"That boy: him."},
+  her:{sym:'👧',cue:"That girl: her."},
+  his:{sym:'👦',cue:"It is his: his."},
+  our:{sym:'👨‍👩‍👦',cue:"It is ours: our!"},
+  your:{sym:'👉',cue:"It is yours: your!"},
+  their:{sym:'👥',cue:"It is theirs: their."},
+  // question / thinking
+  what:{sym:'❓',cue:"Shrug and ask: what?"},
+  who:{sym:'🧑',cue:"Ask: who is it?"},
+  why:{sym:'🤔',cue:"Rub your chin: why?"},
+  when:{sym:'⏰',cue:"Ask: when?"},
+  how:{sym:'🤷',cue:"Shrug: how?"},
+  // yes / no / amounts
+  yes:{sym:'👍',cue:"Thumbs up: yes!"},
+  no:{sym:'👎',cue:"Thumbs down: no!"},
+  not:{sym:'🚫',cue:"Cross your arms: not!"},
+  all:{sym:'🌍',cue:"Big circle arms: all of them!"},
+  some:{sym:'🤏',cue:"Just a few: some."},
+  any:{sym:'🤷',cue:"Any at all? any."},
+  one:{sym:'1️⃣',cue:"One finger: one!"},
+  two:{sym:'2️⃣',cue:"Two fingers: two!"},
+  three:{sym:'3️⃣',cue:"Three fingers: three!"},
+  more:{sym:'➕',cue:"Ask for more: more please!"},
+  too:{sym:'➕',cue:"Me TOO! Point to yourself: too!"},
+  // helpers / time
+  can:{sym:'💪',cue:"Flex your arm: I can!"},
+  will:{sym:'🔮',cue:"It WILL happen: will."},
+  do:{sym:'✅',cue:"Do it! Tick the air: do."},
+  did:{sym:'✅',cue:"Already done: did."},
+  have:{sym:'🤲',cue:"Hold it in your hands: have!"},
+  has:{sym:'🤲',cue:"She HAS it: has."},
+  had:{sym:'🤲',cue:"Had it before: had."},
+  see:{sym:'👁️',cue:"Point to your eye: I see!"},
+  said:{sym:'💬',cue:"Hand by your mouth: he said."},
+  say:{sym:'🗣️',cue:"Open your mouth: say!"},
+  like:{sym:'❤️',cue:"Hand on heart: I like it!"},
+  now:{sym:'⏰',cue:"Right now! Clap once: now!"},
+  then:{sym:'⏭️',cue:"After that: then."},
+  again:{sym:'🔁',cue:"Circle your finger: again!"},
+  away:{sym:'🏃',cue:"Run off: away!"},
+  because:{sym:'🔗',cue:"The reason why: because."},
+  so:{sym:'😮',cue:"So big! so."},
+  very:{sym:'‼️',cue:"Extra lots: very!"},
+  just:{sym:'👌',cue:"Just right: just."},
+  only:{sym:'☝️',cue:"Only one: only."},
+  also:{sym:'➕',cue:"And also: also."},
+  about:{sym:'💭',cue:"Think about it: about."},
+  if:{sym:'🔀',cue:"What if? if."},
+  as:{sym:'🟰',cue:"Same as: as."},
+  than:{sym:'⚖️',cue:"Bigger than: than."},
+  back:{sym:'🔙',cue:"Point behind you: back!"},
+  next:{sym:'⏭️',cue:"What comes next: next!"},
+  first:{sym:'🥇',cue:"Number one: first!"},
+  last:{sym:'🏁',cue:"The very end: last!"}
+};
+function isStarWord(t){ return !!STAR_WORDS[String(t||'').toLowerCase().replace(/[^a-z]/g,'')]; }
+function starInfo(t){ return STAR_WORDS[String(t||'').toLowerCase().replace(/[^a-z]/g,'')]||null; }
+
 /* ---------- Free real pictures from the internet (Iconify, no API key) ----------
    Uses Microsoft's clean, kid-friendly Fluent Emoji (and other open emoji sets).
    The tiny SVG is stored on the word so it works offline after the first fetch.
@@ -728,14 +856,17 @@ async function autoFetchPictures(words, onEach){
   try{
     for(const w of words){
       if(w.pic || w._picTried) continue;
+      if(isStarWord(w.text)) continue;   // sight words use a symbol, not a picture
       const r=await fetchWordPicture(w.text);
       if(r==='none'){ w._picTried=true; save(); }
       else if(r){ w.pic=r.svg; w.picName=r.name; save(); onEach&&onEach(w); }
     }
   } finally { _autoFetching=false; }
 }
-// Picture markup for a word: real SVG if we have one, else the emoji.
+// Picture markup for a word: star-word symbol, else a real SVG, else the emoji.
 function picMarkup(w){
+  const s=starInfo(w&&w.text);
+  if(s) return `<span class="pic-svg star-sym">${s.sym}</span>`;
   if(w && w.pic) return `<span class="pic-svg">${w.pic}</span>`;
   return (w&&w.emoji) || '✨';
 }
@@ -745,8 +876,10 @@ function previewEmoji(){
   pendingEmoji=guessEmoji(w); pendingIdx=0;
   pendingPic=null; pendingPicName=null; pendingCands=[]; pendingCandIdx=0;
   const prev=document.getElementById('emojiPrev');
-  prev.textContent=pendingEmoji;
   clearTimeout(picDebounce);
+  const s=starInfo(w);
+  if(s){ prev.innerHTML=`<span class="star-sym">${s.sym}</span>`; return; }  // star word: symbol, no fetch
+  prev.textContent=pendingEmoji;
   if(!w || !navigator.onLine) return;
   prev.innerHTML='<span class="pic-loading"></span>';
   picDebounce=setTimeout(()=>loadPreviewPicture(w), 450);
@@ -1015,22 +1148,30 @@ function startWord(){
 function wordIntro(done){
   G.stage=0; setDots(0); updateHud();
   const w=G.word.text;
+  const star=starInfo(w);
   renderPic(document.getElementById('gPic'), G.word);
-  document.getElementById('gInstr').textContent="Look at the picture! 👀";
+  document.getElementById('gInstr').textContent = star ? "A special Star Word! ⭐" : "Look at the picture! 👀";
   document.getElementById('gArea').innerHTML=
-    `<div class="word-intro">
+    `<div class="word-intro${star?' star':''}">
        <div class="wi-pic">${picMarkup(G.word)}</div>
        <div class="wi-word">${w}</div>
+       ${star?`<div class="wi-badge">⭐ Star Word</div><div class="wi-cue">${star.cue}</div>`:''}
      </div>`;
   document.getElementById('gControls').innerHTML=
     `<button class="btn big green" id="wiGo">Let's spell it ▶</button>`;
   let advanced=false;
   const go=()=>{ if(advanced||!G) return; advanced=true; clearTimeout(G.introTimer); done(); };
   document.getElementById('wiGo').onclick=go;
-  buddy('👽','happy',"A "+w+"!");
-  playPhrase('this_word_is', ()=>speak(w));
-  // Auto-advance so a non-reader is never stuck, but leave time to look.
-  G.introTimer=setTimeout(go, Math.max(4500,(w.length*250)+4000));
+  if(star){
+    buddy('🌟','happy',"Star word! "+w);
+    // Say the by-heart intro, then the word, then the gesture cue sentence.
+    playPhrase('star_word', ()=>speak(w,{cb:()=>ttsSpeak(star.cue)}));
+    G.introTimer=setTimeout(go, Math.max(7000,(w.length*250)+5500));
+  }else{
+    buddy('👽','happy',"A "+w+"!");
+    playPhrase('this_word_is', ()=>speak(w));
+    G.introTimer=setTimeout(go, Math.max(4500,(w.length*250)+4000));
+  }
 }
 // Visible count-up stopwatch for the current word (encourages taking his time).
 function startTimer(){
