@@ -122,10 +122,57 @@
   .confetti{position:fixed; top:-20px; font-size:26px; z-index:6; pointer-events:none;}
   .hide{display:none !important;}
   footer{position:fixed; bottom:6px; width:100%; text-align:center; font-size:12px; opacity:.5; z-index:1;}
+
+  /* Buddy mascot */
+  #buddy{position:fixed; right:10px; bottom:14px; z-index:4; text-align:center; pointer-events:none;
+         transition:transform .2s ease; display:none;}
+  #buddyFace{font-size:clamp(48px,11vw,84px); line-height:1; filter:drop-shadow(0 6px 10px #0007);
+             display:inline-block;}
+  #buddyBubble{max-width:150px; background:#fff; color:#10122e; font-size:14px; font-weight:bold;
+               padding:6px 10px; border-radius:14px; margin-bottom:4px; opacity:0; transform:translateY(6px) scale(.9);
+               transition:all .2s ease; box-shadow:0 4px 10px #0005;}
+  #buddyBubble.show{opacity:1; transform:translateY(0) scale(1);}
+  #buddyBubble:after{content:""; position:absolute; }
+  .buddy-happy{animation:buddyHop .5s ease;}
+  .buddy-cheer{animation:buddyCheer .6s ease;}
+  .buddy-think{animation:buddyThink .8s ease;}
+  @keyframes buddyHop{0%,100%{transform:translateY(0)}30%{transform:translateY(-24px) rotate(-8deg)}60%{transform:translateY(-8px) rotate(6deg)}}
+  @keyframes buddyCheer{0%,100%{transform:scale(1)}25%{transform:scale(1.3) rotate(-10deg)}50%{transform:scale(1.15) rotate(10deg)}75%{transform:scale(1.25) rotate(-6deg)}}
+  @keyframes buddyThink{0%,100%{transform:rotate(0)}25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}
+
+  /* Combo / streak popup */
+  #combo{position:fixed; top:22%; left:50%; transform:translate(-50%,0) scale(.6); z-index:7;
+         font-size:clamp(30px,8vw,58px); font-weight:bold; color:var(--accent);
+         text-shadow:0 3px 0 #b8912f, 0 0 20px #ffd166aa; opacity:0; pointer-events:none;}
+  #combo.pop{animation:comboPop .9s ease;}
+  @keyframes comboPop{0%{opacity:0; transform:translate(-50%,20px) scale(.5)}
+    30%{opacity:1; transform:translate(-50%,-6px) scale(1.25)}
+    70%{opacity:1; transform:translate(-50%,-10px) scale(1)}
+    100%{opacity:0; transform:translate(-50%,-40px) scale(.9)}}
+
+  /* Sparkle burst */
+  .spark{position:fixed; z-index:7; pointer-events:none; font-size:20px;}
+
+  /* Slot success pop */
+  .slot.correct{animation:slotPop .4s ease;}
+  @keyframes slotPop{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
+
+  /* Rocket blast-off */
+  #rocketLaunch{position:fixed; left:50%; bottom:-120px; transform:translateX(-50%); z-index:8;
+    font-size:110px; pointer-events:none; opacity:0;}
+  #rocketLaunch.go{animation:blastOff 2.2s ease-in forwards;}
+  @keyframes blastOff{0%{opacity:1; bottom:-120px; transform:translateX(-50%) rotate(0)}
+    15%{transform:translateX(-50%) translateX(-8px) rotate(-4deg)}
+    30%{transform:translateX(-50%) translateX(8px) rotate(4deg)}
+    100%{opacity:1; bottom:115vh; transform:translateX(-50%) rotate(0)}}
 </style>
 </head>
 <body>
 <canvas id="stars"></canvas>
+
+<div id="buddy"><div id="buddyBubble"></div><div id="buddyFace">👽</div></div>
+<div id="combo"></div>
+<div id="rocketLaunch">🚀</div>
 
 <!-- HOME -->
 <section id="home" class="screen active center">
@@ -269,6 +316,8 @@ function show(id){
   if(id==='parent') renderParent();
   if(id==='progress') renderProgress();
   if(id==='home') renderHome();
+  // Buddy only appears during the game.
+  const b=document.getElementById('buddy'); if(b) b.style.display = (id==='game')?'block':'none';
   window.speechSynthesis && speechSynthesis.cancel();
 }
 
@@ -526,8 +575,10 @@ let G=null;
 function startDaily(){
   const q=sessionQueue();
   if(!q.length){ speak("Ask a grown up to add your words."); show('parent'); return; }
-  G={ queue:q, wi:0, sessionStars:0, startStars:state.stars, stage:0 };
-  show('game'); updateHud(); startWord();
+  G={ queue:q, wi:0, sessionStars:0, startStars:state.stars, stage:0, streak:0 };
+  show('game'); updateHud();
+  buddy('👽','happy',"Let's go!");
+  startWord();
 }
 function quitGame(){ G=null; show('home'); }
 function updateHud(){
@@ -546,7 +597,7 @@ function setDots(active){
 function startWord(){
   if(G.wi>=G.queue.length){ return endSession(); }
   G.word=G.queue[G.wi];
-  G.stage=0;
+  G.stage=0; G.streak=0;
   document.getElementById('gPic').textContent=G.word.emoji;
   stageListen();
 }
@@ -598,13 +649,13 @@ function stageTap(){
   speak(w);
 }
 function tapLetter(idx,el){
-  if(idx!==G.tapNext){ el.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:200}); buzz(); return; }
+  if(idx!==G.tapNext){ el.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:200}); buzz(); buddy('🤔','think'); return; }
   el.classList.add('done'); el.classList.remove('on');
   speak(letterSound(G.word.text[idx]),{rate:0.9,pitch:1.05});
-  ping();
+  ping(); sparkle(el, 5); buddy(null,'happy');
   G.tapNext++;
   if(G.tapNext>=G.word.text.length){
-    ding(); setTimeout(stageBuild,600);
+    ding(); buddy('😃','happy',randOf(CHEERS)); setTimeout(stageBuild,600);
   }
 }
 
@@ -716,12 +767,18 @@ function placeInSlot(tile, slot){
     document.querySelectorAll('.tile.glow').forEach(t=>t.classList.remove('glow'));
     speak(letterSound(letter),{rate:0.9,pitch:1.05});
     ping();
+    sparkle(active, 7);
+    // Streak of correct letters in a row -> combo fun
+    G.streak=(G.streak||0)+1;
+    if(G.streak>=3 && G.streak%3===0){ showCombo(G.streak); buddy('🤩','cheer',randOf(CHEERS)); }
+    else buddy(null,'happy');
     G.filled++;
     G.att.wrongThisSlot=0;
     if(G.filled>=G.word.text.length){ wordComplete(); }
     else setActiveSlot();
   } else {
     // Wrong letter for the current position -> anti-fluke response.
+    G.streak=0;
     wrongDrop(active, tile);
   }
 }
@@ -745,6 +802,7 @@ function wrongDrop(active, tile){
   buzz();
   lockTiles(850);
   const needed=active.dataset.answer;
+  buddy('🤔','think',randOf(ENCOURAGE));
   if(G.att.wrongThisSlot===1){
     document.getElementById('gInstr').textContent="Listen carefully… 👂";
     setTimeout(()=>speak("Listen. Which letter says, "+letterSound(needed)+"?",{rate:0.85}),300);
@@ -830,6 +888,8 @@ function celebrate(stars, nearClean){
   document.getElementById('celebMsg').innerHTML=`${msg}<br><span style="font-size:.7em">${starRow}</span>`;
   document.getElementById('celebrate').classList.add('show');
   confetti(); win();
+  buddy('🥳','cheer',randOf(CHEERS));
+  sparkle(document.getElementById('gPic'), 14);
   speak((stars===3?"Perfect! ":"Well done! ")+"You spelled "+G.word.text);
 }
 function hideCelebrate(){
@@ -848,6 +908,75 @@ function endSession(){
   document.getElementById('fuelBar').style.width='100%';
   setDots(4);
   win(); confetti();
+  rocketBlastOff();
+  buddy('🚀','cheer','Blast off!');
+  setTimeout(()=>speak("Amazing! You finished all your words! Blast off!"),400);
+}
+
+/* ============================ FUN FX ============================ */
+// Friendly buddy that reacts and (optionally) speaks a short line.
+let buddyTimer=null;
+function buddy(face, mood, line){
+  const f=document.getElementById('buddyFace'); const b=document.getElementById('buddyBubble');
+  if(!f) return;
+  if(face) f.textContent=face;
+  f.classList.remove('buddy-happy','buddy-cheer','buddy-think');
+  void f.offsetWidth; // restart animation
+  if(mood) f.classList.add('buddy-'+mood);
+  if(line){
+    b.textContent=line; b.classList.add('show');
+    clearTimeout(buddyTimer);
+    buddyTimer=setTimeout(()=>b.classList.remove('show'), 1800);
+  }
+}
+const CHEERS=["Wow!","Yes!","Nice!","Super!","Great!","You rock!","Woohoo!","Cool!","High five!"];
+const ENCOURAGE=["Try again!","Almost!","You can do it!","Listen…","So close!"];
+function randOf(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+// Combo / streak
+function showCombo(n){
+  const c=document.getElementById('combo'); if(!c) return;
+  const flames="🔥".repeat(Math.min(3,Math.floor(n/2)));
+  c.textContent = n+" in a row! "+flames;
+  c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
+  comboSound(n);
+}
+function comboSound(n){
+  const base=520+Math.min(n,8)*60;
+  [0,90,180].forEach((d,i)=>setTimeout(()=>tone(base+i*120,0.14,'triangle',0.18),d));
+}
+
+// Sparkle burst at an element
+function sparkle(el, count){
+  if(!el) return;
+  const r=el.getBoundingClientRect();
+  const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  const emo=["✨","⭐","💫","🌟"];
+  for(let i=0;i<(count||8);i++){
+    const s=document.createElement('div'); s.className='spark'; s.textContent=randOf(emo);
+    s.style.left=cx+'px'; s.style.top=cy+'px';
+    document.body.appendChild(s);
+    const ang=Math.random()*6.28, dist=40+Math.random()*60;
+    s.animate([{transform:'translate(-50%,-50%) scale(.4)',opacity:1},
+      {transform:`translate(${Math.cos(ang)*dist-20}px,${Math.sin(ang)*dist-20}px) scale(1.2)`,opacity:0}],
+      {duration:600+Math.random()*400,easing:'ease-out'});
+    setTimeout(()=>s.remove(),1000);
+  }
+}
+
+// Rocket blast-off with rumble
+function rocketBlastOff(){
+  const r=document.getElementById('rocketLaunch'); if(!r) return;
+  r.classList.remove('go'); void r.offsetWidth; r.classList.add('go');
+  rumble();
+}
+function rumble(){
+  const c=ac(); if(!c) return;
+  const o=c.createOscillator(), g=c.createGain();
+  o.type='sawtooth'; o.frequency.setValueAtTime(80,c.currentTime);
+  o.frequency.exponentialRampToValueAtTime(40,c.currentTime+1.8);
+  g.gain.setValueAtTime(0.14,c.currentTime); g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+2);
+  o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+2);
 }
 
 /* ============================ FX ============================ */
@@ -884,15 +1013,27 @@ function confetti(){
 // star field background
 (function starfield(){
   const cv=document.getElementById('stars'), cx=cv.getContext('2d');
-  let stars=[];
+  let stars=[], shooters=[];
   function resize(){ cv.width=innerWidth; cv.height=innerHeight;
     stars=Array.from({length:90},()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,r:Math.random()*1.6+0.3,s:Math.random()*0.4+0.1}));}
   resize(); addEventListener('resize',resize);
+  function spawnShooter(){
+    shooters.push({x:Math.random()*cv.width*0.6, y:Math.random()*cv.height*0.4,
+      vx:6+Math.random()*4, vy:3+Math.random()*2, life:1});
+  }
   (function loop(){
     cx.clearRect(0,0,cv.width,cv.height);
     cx.fillStyle='#fff';
     stars.forEach(st=>{ cx.globalAlpha=0.4+Math.random()*0.5; cx.beginPath(); cx.arc(st.x,st.y,st.r,0,7); cx.fill();
       st.y+=st.s; if(st.y>cv.height){st.y=0; st.x=Math.random()*cv.width;} });
+    // occasional shooting star
+    if(Math.random()<0.004) spawnShooter();
+    shooters.forEach(sh=>{
+      cx.globalAlpha=sh.life; cx.strokeStyle='#ffd166'; cx.lineWidth=2;
+      cx.beginPath(); cx.moveTo(sh.x,sh.y); cx.lineTo(sh.x-sh.vx*4,sh.y-sh.vy*4); cx.stroke();
+      sh.x+=sh.vx; sh.y+=sh.vy; sh.life-=0.012;
+    });
+    shooters=shooters.filter(sh=>sh.life>0 && sh.x<cv.width+50 && sh.y<cv.height+50);
     cx.globalAlpha=1; requestAnimationFrame(loop);
   })();
 })();

@@ -45,6 +45,11 @@ sticks — finishing without learning. Spelling Space is designed so that can't 
   so a messy scramble can never fluke a win.
 
 ## Motivation built in
+- 🛸 A friendly alien buddy that hops, cheers, and encourages as he plays.
+- 🔥 Streak combos — several correct letters in a row trigger a "3 in a row!" cheer.
+- ✨ Sparkle bursts when a letter lands correctly.
+- 🚀 A rocket blasts off at the end of a session.
+- 🌠 Shooting stars drift across the space background.
 - ⭐ Stars for every word completed.
 - 🏆 Badges unlock at 5, 15, 30, 50, 80, 120 stars (Moon → Galaxy).
 - 🚀 A "fuel bar" fills up through the session.
