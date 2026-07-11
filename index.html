@@ -499,7 +499,10 @@ const PHRASE_TEXT = {
   rescued:"You rescued a star friend! Great work, Captain!",
   mission_done:"Mission complete! You brought every star friend home. You are a spelling hero!",
   trace_good:"Beautiful writing!", trace_on:"Trace right on top of the letter.",
-  keep_going:"Keep going, you can do it!"
+  keep_going:"Keep going, you can do it!",
+  do_listen:"Step one, Captain! Listen closely and watch each letter light up.",
+  do_tap:"Catch the letters! Tap each glowing letter, in order, from the start.",
+  do_build:"Beam the letters home! Slide each one into its box to build the word."
 };
 
 // Device text-to-speech (fallback for parent-added words / missing clips).
@@ -801,7 +804,8 @@ function stageListen(){
      <button class="btn green" id="cNext">Next ▶</button>`;
   document.getElementById('cAgain').onclick=playListen;
   document.getElementById('cNext').onclick=stageTap;
-  setTimeout(playListen,400);
+  buddy('👽','happy',"Listen, Captain!");
+  setTimeout(()=>playPhrase('do_listen', ()=>setTimeout(playListen,300)),400);
 }
 function playListen(){
   const ll=document.getElementById('ll'); if(!ll) return;
@@ -831,7 +835,8 @@ function stageTap(){
   G.tapNext=0;
   document.getElementById('gControls').innerHTML=`<button class="btn blue" id="cHear">🔊 Hear word</button>`;
   document.getElementById('cHear').onclick=()=>speak(G.word.text);
-  speak(w);
+  buddy('👽','happy',"Tap the letters!");
+  playPhrase('do_tap', ()=>speak(w));
 }
 function tapLetter(idx,el){
   if(idx!==G.tapNext){ el.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:200}); buzz(); buddy('🤔','think'); return; }
@@ -878,7 +883,8 @@ function buildStage(stage, showHint){
      <button class="btn ghost" id="cHint">💡 Hint</button>`;
   document.getElementById('cHear2').onclick=()=>speak(G.word.text);
   document.getElementById('cHint').onclick=peekHint;
-  speak(w);
+  if(stage===2){ buddy('👽','happy',"Build the word!"); playPhrase('do_build', ()=>speak(w)); }
+  else speak(w);
   if(showHint){
     setTimeout(()=>{ document.querySelectorAll('.slot.hint').forEach(s=>{ s.textContent=s.dataset.hint; }); },300);
     setTimeout(()=>{ document.querySelectorAll('.slot.hint').forEach(s=>{ if(!s.classList.contains('filled')) s.textContent=''; }); },2500);

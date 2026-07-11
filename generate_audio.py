@@ -58,6 +58,10 @@ PHRASES = {
     "trace_good": "Beautiful writing!",
     "trace_on": "Trace right on top of the letter.",
     "keep_going": "Keep going, you can do it!",
+    # ----- Stage action guidance (so a non-reader knows what to do) -----
+    "do_listen": "Step one, Captain! Listen closely and watch each letter light up.",
+    "do_tap": "Catch the letters! Tap each glowing letter, in order, from the start.",
+    "do_build": "Beam the letters home! Slide each one into its box to build the word.",
 }
 
 
