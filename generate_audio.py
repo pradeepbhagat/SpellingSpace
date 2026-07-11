@@ -29,8 +29,8 @@ LETTER_NAMES = {
 # while stops carry a light schwa ("buh"). This is how a child sounds out a word.
 LETTER_SOUNDS = {
     "a": "ah", "b": "buh", "c": "kuh", "d": "duh", "e": "eh", "f": "fff",
-    "g": "guh", "h": "huh", "i": "ih", "j": "juh", "k": "kuh", "l": "lll",
-    "m": "mmm", "n": "nuh", "o": "aw", "p": "puh", "q": "kwuh", "r": "rrr",
+    "g": "guh", "h": "huh", "i": "ih", "j": "juh", "k": "kuh", "l": "luh",
+    "m": "muh", "n": "nuh", "o": "aw", "p": "puh", "q": "kwuh", "r": "ruh",
     "s": "sss", "t": "tuh", "u": "uh", "v": "vvv", "w": "wuh", "x": "ks",
     "y": "yeh", "z": "zzz",
 }
