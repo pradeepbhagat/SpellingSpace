@@ -30,7 +30,7 @@ LETTER_NAMES = {
 LETTER_SOUNDS = {
     "a": "ah", "b": "buh", "c": "kuh", "d": "duh", "e": "eh", "f": "fff",
     "g": "guh", "h": "huh", "i": "ih", "j": "juh", "k": "kuh", "l": "lll",
-    "m": "mmm", "n": "nnn", "o": "aw", "p": "puh", "q": "kwuh", "r": "rrr",
+    "m": "mmm", "n": "nuh", "o": "aw", "p": "puh", "q": "kwuh", "r": "rrr",
     "s": "sss", "t": "tuh", "u": "uh", "v": "vvv", "w": "wuh", "x": "ks",
     "y": "yeh", "z": "zzz",
 }
