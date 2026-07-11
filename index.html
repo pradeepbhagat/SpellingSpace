@@ -252,16 +252,16 @@
   </div>
   <div class="card">
     <h2 style="margin:0">🎙️ Voice</h2>
-    <div class="small">Pick the reading voice. ⭐ = natural &amp; human-sounding. Avoid ones marked "robotic".</div>
+    <div class="small">The app now uses a <b>built-in natural voice</b> for letters, class words and praise — no setup needed. The picker below is only a <b>fallback</b> for custom words you type that aren't pre-recorded.</div>
     <select id="voiceSelect" style="font-size:18px;padding:8px;border-radius:10px;width:100%;margin-top:8px"></select>
     <details style="margin-top:10px" class="small">
-      <summary style="cursor:pointer;font-weight:bold">📱 iPad/iPhone sounds robotic? Tap here (one-time, free)</summary>
+      <summary style="cursor:pointer;font-weight:bold">📱 Want custom-typed words to sound natural too? (one-time, free)</summary>
       <ol style="margin:8px 0 0;padding-left:20px;line-height:1.5">
         <li>Open <b>Settings</b> → <b>Accessibility</b> → <b>Spoken Content</b> → <b>Voices</b> → <b>English</b>.</li>
         <li>Tap a voice, then download one marked <b>(Enhanced)</b> or <b>(Premium)</b> — e.g. <b>Ava (Premium)</b> or <b>Samantha (Enhanced)</b>.</li>
         <li>Come back here, reload the page, and pick the ⭐ voice above.</li>
       </ol>
-      <div style="margin-top:6px;opacity:.8">This gives a real, human-sounding voice. The default iOS voice is a low-quality "compact" one.</div>
+      <div style="margin-top:6px;opacity:.8">Only affects words you type that aren't pre-recorded. The class words and letters already use the built-in natural voice.</div>
     </details>
   </div>
 </section>
@@ -293,6 +293,7 @@
 
 <footer>Made with ❤️ for a future word-champion</footer>
 
+<script src="audio/manifest.js"></script>
 <script>
 /* ============================ DATA ============================ */
 const LS_KEY = "spellingSpace.v1";
@@ -366,7 +367,7 @@ function loadVoices(){
       if(state.voiceURI ? v.voiceURI===state.voiceURI : (best && v.voiceURI===best.voiceURI)) o.selected=true;
       sel.appendChild(o);
     });
-    sel.onchange = ()=>{ state.voiceURI=sel.value; save(); speak("Hi! I will read your words."); };
+    sel.onchange = ()=>{ state.voiceURI=sel.value; save(); playPhrase('hi'); };
   }
 }
 if('speechSynthesis' in window){
@@ -407,12 +408,63 @@ function primeSpeech(){
   if(!('speechSynthesis' in window)) return;
   try{ const u=new SpeechSynthesisUtterance(' '); u.volume=0; speechSynthesis.speak(u); }catch(e){}
 }
-function speak(text, opts){
+
+/* ---- Bundled natural-voice audio (preferred over robotic device TTS) ---- */
+const CLIPS = new Set(window.AUDIO_CLIPS || []);
+const AUDIO_BASE = 'audio/';
+// One reusable <audio> element: unlocking it once (on first tap) lets every
+// later clip play on iOS, and keeps playback nicely sequential.
+let player = null;
+function getPlayer(){ if(!player){ player = new Audio(); player.preload='auto'; } return player; }
+let audioUnlocked = false;
+const SILENCE = 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA';
+function unlockAudio(){
+  if(audioUnlocked) return;
+  const p=getPlayer();
+  try{ p.muted=true; p.src=SILENCE; const pr=p.play();
+    if(pr&&pr.then) pr.then(()=>{ p.pause(); p.currentTime=0; p.muted=false; audioUnlocked=true; })
+                      .catch(()=>{ p.muted=false; }); }catch(e){}
+}
+function playClip(key, opts){
+  opts=opts||{};
+  return new Promise(resolve=>{
+    if(!CLIPS.has(key)){ resolve(false); return; }
+    const p=getPlayer();
+    p.onended=()=>{ p.onended=p.onerror=null; resolve(true); };
+    p.onerror=()=>{ p.onended=p.onerror=null; resolve(false); };
+    try{
+      p.muted=false; p.playbackRate=opts.rate||1; p.currentTime=0;
+      p.src=AUDIO_BASE+key+'.mp3';
+      const pr=p.play();
+      if(pr&&pr.catch) pr.catch(()=>{ p.onended=p.onerror=null; resolve(false); });
+    }catch(e){ resolve(false); }
+  });
+}
+// Map spoken text to a bundled clip key, when we have one.
+function clipKey(text){
+  const t=String(text||'').trim();
+  if(/^[A-Za-z]$/.test(t)) return 'letter_'+t.toLowerCase();
+  const w=t.toLowerCase().replace(/[^a-z]/g,'');
+  if(w && CLIPS.has('word_'+w)) return 'word_'+w;
+  return null;
+}
+// Fallback text for fixed phrases (used if a clip is ever missing).
+const PHRASE_TEXT = {
+  hi:"Hi! I will read your words.", learn:"Hello! Let's learn to spell.",
+  addwords:"Let's add your words first. Ask a grown up.",
+  which_letter:"Listen! Which letter is this?", this_one:"This one!",
+  perfect:"Perfect! You did it!", welldone:"Well done!",
+  blastoff:"Amazing! You finished all your words! Blast off!",
+  listen_watch:"Listen and watch.", try_again:"Let's try again together.",
+  great_job:"Great job!"
+};
+
+// Device text-to-speech (fallback for parent-added words / missing clips).
+function ttsSpeak(text, opts){
   opts=opts||{};
   const rate=opts.rate!=null?opts.rate:0.95, pitch=opts.pitch!=null?opts.pitch:1.0;
   const cb=opts.cb||null, queue=!!opts.queue;
   if(!('speechSynthesis' in window)){ cb&&cb(); return; }
-  // Only interrupt when we're NOT queueing; this prevents chopping mid-word.
   if(!queue) speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(text);
   const v=pickVoice(); if(v) u.voice=v;
@@ -420,19 +472,42 @@ function speak(text, opts){
   if(cb) u.onend=cb;
   speechSynthesis.speak(u);
 }
+
+// Main speak(): use the bundled natural clip when we have one, else device TTS.
+function speak(text, opts){
+  opts=opts||{};
+  const cb=opts.cb||null;
+  const key=clipKey(text);
+  if(key){
+    if('speechSynthesis' in window) speechSynthesis.cancel();
+    playClip(key).then(ok=>{ if(ok){ cb&&cb(); } else { ttsSpeak(text,opts); } });
+    return;
+  }
+  ttsSpeak(text, opts);
+}
+// Say a single letter by its natural clip (falls back to TTS).
+function sayLetter(l, cb){
+  const key='letter_'+String(l).toLowerCase();
+  if(CLIPS.has(key)){ playClip(key).then(ok=>{ ok?(cb&&cb()):ttsSpeak(letterSound(l),{cb}); }); }
+  else ttsSpeak(letterSound(l),{cb});
+}
+// Play a fixed phrase clip, then optionally continue (e.g. with a letter/word).
+function playPhrase(slug, cb){
+  const key='phrase_'+slug;
+  if(CLIPS.has(key)){ playClip(key).then(ok=>{ ok?(cb&&cb()):ttsSpeak(PHRASE_TEXT[slug]||'',{cb}); }); }
+  else ttsSpeak(PHRASE_TEXT[slug]||'',{cb});
+}
 function speakLetters(word, onEachIndex, done){
   const letters=word.split('');
-  // One flush, then queue each letter so the engine doesn't cancel mid-flow.
-  if('speechSynthesis' in window) speechSynthesis.cancel();
   let i=0;
   (function next(){
     if(i>=letters.length){ done&&done(); return; }
     onEachIndex && onEachIndex(i);
-    speak(letterSound(letters[i]),{rate:0.9,pitch:1.0,queue:true,cb:()=>{ i++; setTimeout(next,140); }});
+    sayLetter(letters[i], ()=>{ i++; setTimeout(next,160); });
   })();
 }
 function letterSound(l){ return l.toUpperCase(); }
-function speakTest(){ speak("Hello! Let's learn to spell."); }
+function speakTest(){ playPhrase('learn'); }
 
 /* ============================ HOME ============================ */
 function renderHome(){
@@ -608,7 +683,7 @@ let G=null;
 function startDaily(){
   const q=sessionQueue();
   if(!q.length){
-    speak("Let's add your words first. Ask a grown up.");
+    playPhrase('addwords');
     buddy('👽','think',"Add words first!");
     alert("No words yet on this tablet.\n\nTap “👨\u200d🚀 Grown-up” to add today's words, or use “Load class words”.");
     show('parent'); return;
@@ -843,11 +918,11 @@ function wrongDrop(active, tile){
   buddy('🤔','think',randOf(ENCOURAGE));
   if(G.att.wrongThisSlot===1){
     document.getElementById('gInstr').textContent="Listen carefully… 👂";
-    setTimeout(()=>speak("Listen. Which letter says, "+letterSound(needed)+"?",{rate:0.85}),300);
+    setTimeout(()=>playPhrase('which_letter', ()=>sayLetter(needed)),300);
   } else {
     // Repeated guessing on the same letter: scaffold by glowing the right tile.
     document.getElementById('gInstr').textContent="Find this letter 👇";
-    setTimeout(()=>speak("This one. "+letterSound(needed),{rate:0.95}),300);
+    setTimeout(()=>playPhrase('this_one', ()=>sayLetter(needed)),300);
     highlightCorrectTile(needed);
   }
   // Too much random guessing in dictation -> gently restart so a mess can't fluke a win.
@@ -928,7 +1003,7 @@ function celebrate(stars, nearClean){
   confetti(); win();
   buddy('🥳','cheer',randOf(CHEERS));
   sparkle(document.getElementById('gPic'), 14);
-  speak((stars===3?"Perfect! ":"Well done! ")+"You spelled "+G.word.text);
+  playPhrase(stars===3?'perfect':'welldone', ()=>setTimeout(()=>speak(G.word.text),120));
 }
 function hideCelebrate(){
   document.getElementById('celebrate').classList.remove('show');
@@ -948,7 +1023,7 @@ function endSession(){
   win(); confetti();
   rocketBlastOff();
   buddy('🚀','cheer','Blast off!');
-  setTimeout(()=>speak("Amazing! You finished all your words! Blast off!"),400);
+  setTimeout(()=>playPhrase('blastoff'),400);
 }
 
 /* ============================ FUN FX ============================ */
@@ -1086,7 +1161,7 @@ function shuffle(a, original){
   return a;
 }
 
-document.addEventListener('pointerdown', function unlock(){ ac(); if('speechSynthesis'in window){speechSynthesis.resume&&speechSynthesis.resume(); primeSpeech();} document.removeEventListener('pointerdown',unlock); }, {once:true});
+document.addEventListener('pointerdown', function unlock(){ ac(); unlockAudio(); if('speechSynthesis'in window){speechSynthesis.resume&&speechSynthesis.resume(); primeSpeech();} document.removeEventListener('pointerdown',unlock); }, {once:true});
 
 // Register the service worker so home-screen installs auto-update to the latest
 // version when online (network-first) and still work offline.
