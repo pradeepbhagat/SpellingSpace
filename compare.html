@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Sound Compare — Robot vs Human</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    background:#1a1030;color:#fff;padding:16px 12px 90px;}
+  h1{font-size:21px;margin:0 0 6px}
+  p.lead{opacity:.85;font-size:14px;line-height:1.45;margin:0 0 16px}
+  .row{display:flex;align-items:center;gap:8px;background:#2a1b47;border-radius:14px;
+    padding:10px;margin:0 0 12px}
+  .lt{font-size:30px;font-weight:900;color:#ffd166;width:34px;text-align:center;flex:none}
+  .play{flex:1;min-height:56px;border:0;border-radius:12px;font-size:15px;font-weight:800;
+    color:#241533;cursor:pointer}
+  .robot{background:linear-gradient(#cfd8ff,#9aa9ff)}
+  .human{background:linear-gradient(#ffe58a,#ffc93c)}
+  .play:active{transform:translateY(2px)}
+  .pick{display:flex;gap:6px;flex:none}
+  .pick button{width:44px;height:44px;border:0;border-radius:10px;font-size:20px;
+    background:#3d2a5f;color:#fff;cursor:pointer}
+  .pick button.on{outline:3px solid #6cf;background:#124}
+  .pick button.human-on{outline:3px solid #ffd166;background:#442e00}
+  #bar{position:fixed;left:0;right:0;bottom:0;background:#120a24;
+    border-top:2px solid #ffd16655;padding:10px 12px;font-size:13px;line-height:1.5}
+  #bar b{color:#ffd166}
+  #verdict{max-height:60px;overflow:auto}
+  .cp{margin-top:6px}
+  .cp button{background:#6cf;color:#03263b;border:0;border-radius:9px;padding:7px 12px;
+    font-weight:800;font-size:13px}
+  .hd{display:flex;gap:8px;font-size:11px;opacity:.7;margin:0 0 6px;padding:0 4px}
+  .hd .a{flex:1;text-align:center}
+</style>
+</head>
+<body>
+  <h1>🔊 Which sounds better?</h1>
+  <p class="lead">For each letter, tap <b>🔵 Robot</b> and <b>🟡 Human</b> to hear both.
+    Then tap 🔵 or 🟡 on the right to choose the one that sounds like a clear, real
+    letter <b>sound</b> (not weird). If BOTH are bad, tap ❌. Read me the verdict at the bottom when done.</p>
+  <div class="hd"><span class="lt"></span><span class="a">🔵 Robot (now)</span><span class="a">🟡 Human (new)</span><span style="width:140px"></span></div>
+  <div id="rows"></div>
+
+  <div id="bar">Verdict: <span id="verdict">— pick some —</span>
+    <div class="cp"><button id="copy">Copy verdict</button></div>
+  </div>
+<script>
+const LETTERS="abcdefghijklmnoprstuvwyz".split(""); // q,x are blends; k added after c
+const ALL=["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","r","s","t","u","v","w","y","z"];
+const choice={};
+let audio=new Audio();
+function play(src){ audio.pause(); audio=new Audio(src); audio.play().catch(()=>{}); }
+function draw(){
+  const wrap=document.getElementById('rows');
+  ALL.forEach(l=>{
+    const row=document.createElement('div'); row.className='row';
+    row.innerHTML=`<div class="lt">${l.toUpperCase()}</div>`;
+    const rb=document.createElement('button'); rb.className='play robot'; rb.textContent='▶ robot';
+    rb.onclick=()=>play('cmp/robot/'+l+'.mp3');
+    const hb=document.createElement('button'); hb.className='play human'; hb.textContent='▶ human';
+    hb.onclick=()=>play('cmp/human/'+l+'.mp3');
+    const pick=document.createElement('div'); pick.className='pick';
+    const pr=document.createElement('button'); pr.textContent='🔵';
+    const ph=document.createElement('button'); ph.textContent='🟡';
+    const px=document.createElement('button'); px.textContent='❌';
+    const setSel=(v)=>{ choice[l]=v;
+      pr.className=v==='robot'?'on':''; ph.className=v==='human'?'human-on':''; px.className=v==='bad'?'on':'';
+      verdict(); };
+    pr.onclick=()=>setSel('robot'); ph.onclick=()=>setSel('human'); px.onclick=()=>setSel('bad');
+    pick.append(pr,ph,px);
+    row.append(rb,hb,pick);
+    wrap.appendChild(row);
+  });
+}
+function verdict(){
+  const parts=ALL.filter(l=>choice[l]).map(l=>`${l}:${choice[l][0]}`); // r/h/b
+  document.getElementById('verdict').innerHTML = parts.length? parts.join(' ') : '— pick some —';
+}
+document.getElementById('copy').onclick=()=>{
+  const parts=ALL.filter(l=>choice[l]).map(l=>`${l}:${choice[l][0]}`);
+  const txt=parts.join(' ');
+  navigator.clipboard&&navigator.clipboard.writeText(txt);
+  const b=document.getElementById('copy'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy verdict',1200);
+};
+draw();
+</script>
+</body>
+</html>
