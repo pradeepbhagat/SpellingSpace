@@ -277,6 +277,27 @@
   @keyframes starGlow{
     from{filter:drop-shadow(0 6px 10px #0007) drop-shadow(0 0 6px #ffd16644)}
     to{filter:drop-shadow(0 10px 18px #0007) drop-shadow(0 0 26px #ffd166cc)}}
+  /* Starter 3-letter word picker */
+  .starter-grid{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+  .starter-grid .sw{padding:9px 14px; border-radius:12px; font-size:18px; font-weight:800;
+    background:#3d2a5f; color:#fff; border:2px solid transparent; cursor:pointer;
+    user-select:none; transition:transform .08s;}
+  .starter-grid .sw:active{transform:scale(.94);}
+  .starter-grid .sw.sel{background:linear-gradient(#c9f7c1,#7ee06a); color:#123; border-color:#3fae2a;}
+  .starter-grid .sw.have{opacity:.4; text-decoration:line-through;}
+  /* Quick-check (assessment) overlay */
+  .assess{position:fixed; inset:0; background:#160d2be8; z-index:60;
+    display:none; align-items:center; justify-content:center; padding:18px;}
+  .assess.show{display:flex;}
+  .assess-box{background:#241542; border-radius:22px; padding:22px 18px 18px;
+    max-width:460px; width:100%; text-align:center; box-shadow:0 12px 40px #000a;}
+  .assess-prog{font-size:14px; opacity:.7; margin-bottom:6px; letter-spacing:1px;}
+  .assess-pic{font-size:clamp(70px,22vw,120px); line-height:1;}
+  .assess-pic svg{width:1em; height:1em; vertical-align:middle;}
+  .assess-word{font-size:clamp(38px,12vw,72px); font-weight:900; letter-spacing:4px;
+    color:#fff; text-shadow:0 3px 0 #b8912f;}
+  .assess-btns{display:flex; gap:10px;}
+  .assess-btns .btn{flex:1;}
 </style>
 </head>
 <body>
@@ -337,6 +358,19 @@
       <div>Icon: <span id="emojiPrev" style="font-size:34px">✨</span>
         <span class="link" onclick="cycleEmoji()">change</span></div>
       <button class="btn green" onclick="addWord()">Add word</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">🎯 Start here: 3-letter words</h2>
+      <button class="btn ghost" id="starterClear" onclick="clearStarterSel()">Clear</button>
+    </div>
+    <div class="small">Tap the words you want him to practise. Then add them to play,
+      or run a quick check to see which he already knows.</div>
+    <div id="starterGrid" class="starter-grid"></div>
+    <div class="row" style="gap:8px;margin-top:10px">
+      <button class="btn green" onclick="addSelectedStarters()">➕ Add selected <span id="selCountA">(0)</span></button>
+      <button class="btn blue" onclick="startAssessment()">📝 Quick check <span id="selCountB">(0)</span></button>
     </div>
   </div>
   <div class="card">
@@ -420,6 +454,24 @@
   <button class="btn big green" onclick="hideCelebrate()">Next ▶</button>
 </div>
 
+<!-- Quick-check (assessment) overlay -->
+<div class="assess" id="assess">
+  <div class="assess-box">
+    <div class="assess-prog" id="assessProg">Word 1 of 3</div>
+    <div class="assess-pic" id="assessPic">✨</div>
+    <div class="assess-word" id="assessWord">cat</div>
+    <div class="small" style="opacity:.85;margin:2px 0 14px">Say it to him. Does he know how to spell it?</div>
+    <div class="assess-btns">
+      <button class="btn big" style="background:#ef476f;color:#fff" onclick="assessMark(false)">📝 Needs practice</button>
+      <button class="btn big green" onclick="assessMark(true)">✓ Knew it</button>
+    </div>
+    <div class="row" style="justify-content:center;gap:14px;margin-top:12px">
+      <span class="link" onclick="assessReplay()">🔊 Say again</span>
+      <span class="link" onclick="endAssessment()">✕ Stop</span>
+    </div>
+  </div>
+</div>
+
 <footer>Made with ❤️ for a future word-champion</footer>
 
 <script src="audio/manifest.js"></script>
@@ -447,6 +499,18 @@ const FALLBACK_EMOJIS = ["✨","🌟","🪐","🚀","👽","☄️","🌈","🎈
 // Words already covered in class — imported as older "review" words.
 const CLASS_WORDS = ["and","good","this","very","class","fire","field","trip","with",
   "monkey","right","next","said","them","there","tried","snacks","table","today","yellow"];
+
+// Starter 3-letter words, drawn from the uploaded words.txt dictionary
+// (kid-appropriate / decodable; abbreviations and month names removed).
+// These are what a beginning reader "starts with".
+const STARTER_3 = ["add","and","ant","arm","art","ask","bad","bag","bar","bat","bed",
+  "bee","big","bit","box","boy","bus","but","buy","can","car","cat","cow","cry","cup",
+  "day","did","dog","ear","eat","egg","end","eye","fan","far","few","fox","fun","get",
+  "got","had","hat","hen","her","him","his","hot","how","hug","jam","job","key","leg",
+  "let","log","lot","man","map","men","mud","net","new","not","now","nut","off","oil",
+  "old","one","out","owl","own","pen","pig","pot","put","rat","red","rug","run","sad",
+  "say","see","set","she","six","sun","ten","the","top","try","two","use","way","who",
+  "why","yes","you","zoo"];
 
 let state = load();
 function load(){
@@ -957,6 +1021,95 @@ function loadClassWords(){
   save(); renderParent();
   speak(added? "Added "+added+" class words." : "Class words already added.");
 }
+
+/* ---------- Starter 3-letter word picker + quick check (assessment) ---------- */
+let starterSel=new Set();
+function haveWord(t){ return state.words.some(w=>w.text===t); }
+function renderStarterGrid(){
+  const g=document.getElementById('starterGrid'); if(!g) return;
+  g.innerHTML='';
+  STARTER_3.forEach(t=>{
+    const b=document.createElement('div');
+    const have=haveWord(t);
+    b.className='sw'+(starterSel.has(t)?' sel':'')+(have?' have':'');
+    b.textContent=t;
+    b.title=have?'Already in your word list':'';
+    if(!have) b.onclick=()=>toggleStarter(t);
+    g.appendChild(b);
+  });
+  updateSelCount();
+}
+function toggleStarter(t){
+  if(starterSel.has(t)) starterSel.delete(t); else starterSel.add(t);
+  renderStarterGrid();
+  speak(t);   // gentle audio feedback of the word
+}
+function clearStarterSel(){ starterSel.clear(); renderStarterGrid(); }
+function updateSelCount(){
+  const n=starterSel.size;
+  const a=document.getElementById('selCountA'), b=document.getElementById('selCountB');
+  if(a) a.textContent='('+n+')'; if(b) b.textContent='('+n+')';
+}
+function makeWord(text, opts){
+  opts=opts||{};
+  return {text, emoji:guessEmoji(text), pic:null, picName:null,
+    correct:opts.correct||0, wrong:0, mastered:!!opts.mastered,
+    added:opts.added||Date.now()};
+}
+function addSelectedStarters(){
+  const picked=[...starterSel].filter(t=>!haveWord(t));
+  if(!picked.length){ speak("Tap some words first."); return; }
+  const added=[];
+  picked.forEach(t=>{ const w=makeWord(t); state.words.push(w); added.push(w); });
+  save(); starterSel.clear(); renderParent();
+  autoFetchPictures(added, ()=>renderParent());
+  speak("Added "+picked.length+(picked.length===1?" word.":" words."));
+}
+
+// Quick check: go through the selected words, parent marks knew-it / needs-practice.
+let AS=null;
+function startAssessment(){
+  const list=[...starterSel];
+  if(!list.length){ speak("Tap some words to check first."); return; }
+  AS={ list, i:0 };
+  document.getElementById('assess').classList.add('show');
+  assessShow();
+}
+function assessShow(){
+  if(!AS) return;
+  if(AS.i>=AS.list.length){ return endAssessment(true); }
+  const t=AS.list[AS.i];
+  document.getElementById('assessProg').textContent='Word '+(AS.i+1)+' of '+AS.list.length;
+  document.getElementById('assessWord').textContent=t;
+  const existing=state.words.find(w=>w.text===t);
+  document.getElementById('assessPic').innerHTML=picMarkup(existing||{text:t, emoji:guessEmoji(t)});
+  setTimeout(()=>speak(t), 250);
+}
+function assessReplay(){ if(AS) speak(AS.list[AS.i]); }
+function assessMark(knew){
+  if(!AS) return;
+  const t=AS.list[AS.i];
+  let w=state.words.find(x=>x.text===t);
+  if(!w){
+    // Knew-it words come in as older/mastered (low priority); needs-practice as fresh/hot.
+    w=makeWord(t, knew?{mastered:true, correct:3, added:Date.now()-6*DAY_MS}
+                     :{added:Date.now()});
+    state.words.push(w);
+    if(!w.pic) autoFetchPictures([w]);
+  }else{
+    if(knew){ w.mastered=true; w.correct=Math.max(w.correct,3); }
+    else { w.mastered=false; w.added=Date.now(); }   // bump to top priority
+  }
+  save();
+  AS.i++;
+  assessShow();
+}
+function endAssessment(done){
+  document.getElementById('assess').classList.remove('show');
+  const n=AS?AS.list.length:0;
+  AS=null; starterSel.clear(); renderParent();
+  if(done) speak("All checked! Needs-practice words come first.");
+}
 function setSlateLevel(lvl){
   state.slateLevel=lvl; save(); highlightSlateLevel();
   const names={easy:'Easy',normal:'Normal',strict:'Strict'};
@@ -978,6 +1131,7 @@ function wordStatusBadge(w){
 function renderParent(){
   loadVoices();
   highlightSlateLevel();
+  renderStarterGrid();
   const list=document.getElementById('parentList');
   list.innerHTML='';
   if(!state.words.length){ list.innerHTML='<div class="small">No words yet. Add the 2 words from school above.</div>'; }
