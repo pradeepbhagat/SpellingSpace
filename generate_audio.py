@@ -109,7 +109,14 @@ async def main():
     for l, name in LETTER_NAMES.items():
         await gen(name, os.path.join(OUT, f"letter_{l}.mp3"), rate="-12%")
     print("Letter sounds (phonics):")
+    # NOTE: sound_* clips for most letters are REAL human IPA recordings from
+    # Wikimedia Commons (installed separately, CC BY-SA). We only TTS-generate the
+    # blends q(/kw/) and x(/ks/), which have no single human phoneme recording.
+    # gen() is idempotent (skips existing files) so the human clips are preserved.
+    HUMAN_SOUND_LETTERS = set("abcdefghijklmnoprstuvwyz")  # human recordings, do not TTS
     for l, snd in LETTER_SOUNDS.items():
+        if l in HUMAN_SOUND_LETTERS:
+            continue
         # Stops crisp (+0%); short vowels & continuants slightly slowed for clarity.
         rate = "+0%" if l in STOP_LETTERS else "-6%"
         await gen(snd, os.path.join(OUT, f"sound_{l}.mp3"), rate=rate)
